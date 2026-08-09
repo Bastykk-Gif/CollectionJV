@@ -158,6 +158,7 @@ a{color:inherit;}
 .field dd input:focus-visible, .field dd select:focus-visible{outline:none; border-bottom:2px solid var(--stamp);}
 .field.required dt::after{content:' *'; color:var(--stamp);}
 .card-preview.editable{cursor:pointer;}
+.card-preview.editable.drag-over{outline:2px dashed var(--brass-light); outline-offset:-2px;}
 .card-preview.viewable{cursor:zoom-in;}
 .preview-hint{position:absolute; inset:0; display:flex; align-items:center; justify-content:center; background:rgba(0,0,0,.55); color:#fff; font-family:'Inter',sans-serif; font-weight:600; font-size:.82rem; opacity:0; transition:opacity .15s ease; text-align:center; padding:0 10px;}
 .card-preview.editable:hover .preview-hint, .card-preview.editable:focus-visible .preview-hint{opacity:1;}
@@ -376,6 +377,38 @@ function compressImage(file, maxDim=640, quality=0.72){
     img.onerror = ()=>{ URL.revokeObjectURL(url); reject(new Error('Lecture de l\'image impossible')); };
     img.src = url;
   });
+}
+
+/* ---------- glisser-déposer d'une image (depuis le disque ou une page web) ---------- */
+function extractDroppedImageUrl(dt){
+  const uriList = dt.getData('text/uri-list');
+  if(uriList){
+    const line = uriList.split('\n').find(l => l && !l.startsWith('#'));
+    if(line) return line.trim();
+  }
+  const html = dt.getData('text/html');
+  if(html){
+    const m = html.match(/<img[^>]+src=["']([^"']+)["']/i);
+    if(m) return m[1];
+  }
+  const text = dt.getData('text/plain');
+  if(text && /^(https?|data):/i.test(text.trim())) return text.trim();
+  return null;
+}
+async function handleDroppedImage(dt){
+  if(dt.files && dt.files.length && dt.files[0].type.startsWith('image/')){
+    return compressImage(dt.files[0]);
+  }
+  const url = extractDroppedImageUrl(dt);
+  if(!url) throw new Error('Aucune image détectée dans l\'élément déposé.');
+  try{
+    const res = await fetch(url);
+    if(!res.ok) throw new Error('fetch impossible');
+    const blob = await res.blob();
+    return await compressImage(blob);
+  }catch(fetchErr){
+    return url; // image inaccessible en JS (CORS) : on conserve simplement l'URL externe
+  }
 }
 
 /* ---------- connection status ---------- */
@@ -707,7 +740,7 @@ function renderCard(g, editMode){
   const previewInner = hasImg ? `<img src="${escapeAttr(g.img)}" alt="" onerror="this.style.display='none';">` : `<span class="box-plat-tag">${escapeHtml(g.p||g.cat||'')}</span>`;
   const previewRatio = g.p ? ratioFor(g.p) : DEFAULT_RATIO;
   const previewNum = ratioNum(previewRatio);
-  const previewHintHtml = editMode ? `<div class="preview-hint">${hasImg ? 'Changer la photo' : '+ Ajouter une photo'}</div>` : '';
+  const previewHintHtml = editMode ? `<div class="preview-hint">${hasImg ? 'Changer la photo (clic ou glisser-déposer)' : '+ Ajouter une photo (clic ou glisser-déposer)'}</div>` : '';
   const previewRemoveHtml = (editMode && hasImg) ? `<button type="button" class="preview-remove" id="removePhotoBtn" title="Retirer la photo">✕</button>` : '';
   const previewClass = editMode ? 'editable' : (hasImg ? 'viewable' : '');
 
@@ -728,6 +761,23 @@ function renderCard(g, editMode){
     previewEl.addEventListener('click', e=>{
       if(e.target.closest('.preview-remove')) return;
       fileInput.click();
+    });
+    previewEl.addEventListener('dragover', e=>{
+      e.preventDefault();
+      previewEl.classList.add('drag-over');
+    });
+    previewEl.addEventListener('dragleave', ()=>{ previewEl.classList.remove('drag-over'); });
+    previewEl.addEventListener('drop', async e=>{
+      e.preventDefault();
+      previewEl.classList.remove('drag-over');
+      try{
+        const img = await handleDroppedImage(e.dataTransfer);
+        const vals = readForm();
+        renderCard(Object.assign({}, g, vals, {img}), true);
+      }catch(err){
+        console.error(err);
+        alert(err.message || "Échec de l'import de la photo.");
+      }
     });
     fileInput.addEventListener('change', async e=>{
       const file = e.target.files[0];
