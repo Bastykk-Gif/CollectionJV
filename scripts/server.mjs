@@ -44,16 +44,24 @@ async function writeJsonFile(p, data){
 
 const coverCache = readJsonFile(CACHE_PATH, {});
 const skipped = new Set(readJsonFile(SKIPPED_PATH, []));
+const GAMES_CACHE_PATH = path.join(DATA_DIR, 'games-cache.json');
+const forceRefresh = process.argv.includes('--refresh-games');
 
 admin.initializeApp({
   credential: admin.credential.cert(JSON.parse(fs.readFileSync(serviceAccountFullPath, 'utf8'))),
 });
 const db = admin.firestore();
 
-console.log('Chargement du catalogue depuis Firestore…');
-const snap = await db.collection('games').get();
-const games = snap.docs.map(d => Object.assign({ id: d.id }, d.data()));
-console.log(`${games.length} jeux chargés.`);
+let games = !forceRefresh ? readJsonFile(GAMES_CACHE_PATH, null) : null;
+if(games){
+  console.log(`${games.length} jeux chargés depuis le cache local (0 lecture Firestore). Lancez avec --refresh-games pour forcer une relecture.`);
+}else{
+  console.log('Chargement du catalogue depuis Firestore…');
+  const snap = await db.collection('games').get();
+  games = snap.docs.map(d => Object.assign({ id: d.id }, d.data()));
+  console.log(`${games.length} jeux chargés (${games.length} lectures Firestore).`);
+  await writeJsonFile(GAMES_CACHE_PATH, games);
+}
 
 let platformIdToName = readJsonFile(PLATFORMS_PATH, null);
 if(!platformIdToName){
@@ -151,6 +159,7 @@ const server = http.createServer(async (req, res) => {
       g.img = img;
       skipped.delete(id);
       await writeJsonFile(SKIPPED_PATH, [...skipped]);
+      await writeJsonFile(GAMES_CACHE_PATH, games);
       return sendJson(res, 200, { ok: true });
     }
 
