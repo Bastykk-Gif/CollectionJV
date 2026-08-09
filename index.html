@@ -523,8 +523,7 @@ function renderNavMenu(list){
     const color = CAT_HEX[fam] || '#333';
     const famPlats = consoleOrder(list.filter(g=>g.cat===fam)).map(o=>o.platform);
     const famActive = (state.mode==='family' && state.value===fam) ? 'active' : '';
-    const platActiveInFam = state.mode==='platform' && famPlats.includes(state.value);
-    const expanded = famActive || platActiveInFam || !collapsedFamilies.has(fam);
+    const expanded = !collapsedFamilies.has(fam);
     html += `<div class="nav-family">
       <div class="nav-fam-row">
         <a href="#" class="nav-fam-link ${famActive}" data-mode="family" data-value="${escapeAttr(fam)}" style="border-left-color:${color};">${escapeHtml(fam)}</a>
@@ -533,7 +532,7 @@ function renderNavMenu(list){
       <div class="nav-consoles ${expanded?'':'collapsed'}">
         ${famPlats.map(p=>{
           const platActive = (state.mode==='platform' && state.value===p) ? 'active' : '';
-          return `<a href="#" class="nav-plat-link ${platActive}" data-mode="platform" data-value="${escapeAttr(p)}" style="border-left-color:${color};">${escapeHtml(p)}</a>`;
+          return `<a href="#" class="nav-plat-link ${platActive}" data-mode="platform" data-value="${escapeAttr(p)}" data-fam="${escapeAttr(fam)}" style="border-left-color:${color};">${escapeHtml(p)}</a>`;
         }).join('')}
       </div>
     </div>`;
@@ -544,7 +543,10 @@ function renderNavMenu(list){
       e.preventDefault();
       const mode = a.dataset.mode;
       if(mode === 'all'){ state.mode = 'all'; state.value = null; }
-      else { state.mode = mode; state.value = a.dataset.value; }
+      else {
+        state.mode = mode; state.value = a.dataset.value;
+        collapsedFamilies.delete(mode === 'family' ? a.dataset.value : a.dataset.fam);
+      }
       closeSidebarMobile();
       render();
     });
