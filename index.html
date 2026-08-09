@@ -9,6 +9,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Anton&family=Space+Mono:wght@400;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
 <style>
 :root{
   --bg:#141110; --bg-soft:#1B1715; --panel:#211C19;
@@ -113,8 +114,11 @@ a{color:inherit;}
 .field dd input, .field dd select{width:100%; text-align:right; border:none; border-bottom:1px solid var(--ink-soft); background:transparent; color:var(--ink); font-family:'Inter',sans-serif; font-weight:600; font-size:.92rem; padding:3px 0;}
 .field dd input:focus-visible, .field dd select:focus-visible{outline:none; border-bottom:2px solid var(--stamp);}
 .field.required dt::after{content:' *'; color:var(--stamp);}
-.photo-upload{display:flex; align-items:center; gap:10px; margin-top:14px; flex-wrap:wrap;}
-.photo-status{font-family:'Inter',sans-serif; font-size:.8rem; color:var(--ink-soft);}
+.card-preview.editable{cursor:pointer;}
+.preview-hint{position:absolute; inset:0; display:flex; align-items:center; justify-content:center; background:rgba(0,0,0,.55); color:#fff; font-family:'Inter',sans-serif; font-weight:600; font-size:.82rem; opacity:0; transition:opacity .15s ease; text-align:center; padding:0 10px;}
+.card-preview.editable:hover .preview-hint, .card-preview.editable:focus-visible .preview-hint{opacity:1;}
+.preview-remove{position:absolute; top:7px; right:7px; width:28px; height:28px; border-radius:50%; background:rgba(0,0,0,.65); color:#fff; border:none; font-size:.85rem; cursor:pointer; display:flex; align-items:center; justify-content:center; z-index:2;}
+.preview-remove:hover{background:var(--stamp);}
 .card-actions{display:flex; gap:9px; margin-top:18px; flex-wrap:wrap;}
 .btn{font-family:'Inter',sans-serif; font-weight:600; font-size:.88rem; padding:10px 16px; border-radius:6px; border:1px solid var(--ink); background:transparent; color:var(--ink); cursor:pointer;}
 .btn.primary{background:var(--ink); color:var(--card); border-color:var(--ink);}
@@ -141,9 +145,44 @@ a{color:inherit;}
 @media (prefers-reduced-motion:reduce){
   *{animation-duration:.001s !important; transition-duration:.001s !important;}
 }
+
+/* ---------- AUTH GATE ---------- */
+.auth-gate{position:fixed; inset:0; background:var(--bg); z-index:500; display:flex; align-items:center; justify-content:center; padding:20px;}
+.auth-gate[hidden]{display:none;}
+.auth-card{background:var(--card); color:var(--ink); width:min(380px,100%); border-radius:8px; box-shadow:var(--shadow); padding:34px 28px; border-top:7px solid var(--brass); text-align:center;}
+.auth-card .eyebrow{color:var(--ink-soft); margin-bottom:6px;}
+.auth-card h2{font-family:'Anton',sans-serif; font-size:1.9rem; margin-bottom:18px; letter-spacing:.01em;}
+.auth-field{margin-bottom:14px; text-align:left;}
+.auth-field label{display:block; font-family:'Inter',sans-serif; font-weight:600; font-size:.78rem; text-transform:uppercase; letter-spacing:.04em; color:var(--ink-soft); margin-bottom:5px;}
+.auth-field input{width:100%; padding:10px 12px; border-radius:6px; border:1px solid rgba(42,33,24,.3); background:#fff; color:var(--ink); font-family:'Inter',sans-serif; font-size:.95rem;}
+.auth-field input:focus-visible{outline:2px solid var(--stamp);}
+.auth-error{color:var(--stamp); font-family:'Inter',sans-serif; font-size:.8rem; margin:2px 0 14px; min-height:1.1em;}
+.auth-submit{width:100%; background:var(--ink); color:var(--card); border:none; padding:12px; border-radius:6px; font-family:'Inter',sans-serif; font-weight:700; font-size:.92rem; cursor:pointer; margin-top:4px;}
+.auth-submit:hover{opacity:.85;}
+.auth-submit:disabled{opacity:.5; cursor:not-allowed;}
+.logout-btn{margin-left:auto;}
 </style>
 </head>
 <body>
+
+<div class="auth-gate" id="authGate">
+  <div class="auth-card">
+    <p class="eyebrow">ACCÈS RÉSERVÉ</p>
+    <h2>Collection de JV</h2>
+    <form id="authForm">
+      <div class="auth-field">
+        <label for="authEmail">E-mail</label>
+        <input type="email" id="authEmail" autocomplete="username" required>
+      </div>
+      <div class="auth-field">
+        <label for="authPassword">Mot de passe</label>
+        <input type="password" id="authPassword" autocomplete="current-password" required>
+      </div>
+      <p class="auth-error" id="authError"></p>
+      <button type="submit" class="auth-submit">Se connecter</button>
+    </form>
+  </div>
+</div>
 
 <header class="hero">
   <div class="hero-inner">
@@ -164,9 +203,10 @@ a{color:inherit;}
       <input id="searchInput" type="text" placeholder="Rechercher un titre, un éditeur, une franchise…" autocomplete="off">
     </div>
     <button class="icon-btn" id="exportBtn" type="button" title="Télécharger une copie du catalogue">⭳ Copie de secours</button>
+    <button class="icon-btn logout-btn" id="logoutBtn" type="button" title="Se déconnecter">⎋ Déconnexion</button>
   </div>
   <div class="row2">
-    <select id="sortSelect" aria-label="Trier ou aller à une console"></select>
+    <select id="sortSelect" aria-label="Aller à une console"></select>
     <span class="result-count" id="resultCount"></span>
   </div>
 </nav>
@@ -194,6 +234,7 @@ const firebaseConfig = {
 
 firebase.initializeApp(firebaseConfig);
 const db = firebase.firestore();
+const auth = firebase.auth();
 const gamesCol = db.collection('games');
 const metaDoc = db.collection('meta').doc('status');
 
@@ -234,7 +275,7 @@ const FIELD_DEFS = [
 ];
 
 let allGames = [];
-const state = { q:'', platform:'all', sort:'console' };
+const state = { q:'', platform:'all' };
 
 function collator(a,b){ return (a||'').localeCompare(b||'', 'fr', {sensitivity:'base'}); }
 function slug(s){ return String(s).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]+/g,'-').replace(/(^-|-$)/g,''); }
@@ -313,7 +354,39 @@ async function init(){
     document.getElementById('shelf').innerHTML = `<div class="loading-state">Impossible d'initialiser le fichier sur Firebase.<br>Vérifiez que Firestore est activé et que les règles de sécurité autorisent la lecture/écriture.</div>`;
   }
 }
-init();
+
+/* ---------- authentication gate ---------- */
+const authGate = document.getElementById('authGate');
+const authForm = document.getElementById('authForm');
+const authError = document.getElementById('authError');
+let appStarted = false;
+
+auth.onAuthStateChanged(user=>{
+  if(user){
+    authGate.hidden = true;
+    if(!appStarted){ appStarted = true; init(); }
+  } else {
+    authGate.hidden = false;
+  }
+});
+
+authForm.addEventListener('submit', async e=>{
+  e.preventDefault();
+  authError.textContent = '';
+  const email = document.getElementById('authEmail').value.trim();
+  const password = document.getElementById('authPassword').value;
+  const submitBtn = authForm.querySelector('.auth-submit');
+  submitBtn.disabled = true;
+  try{
+    await auth.signInWithEmailAndPassword(email, password);
+  }catch(err){
+    console.error(err);
+    authError.textContent = "Connexion impossible — vérifiez l'e-mail et le mot de passe.";
+  }
+  submitBtn.disabled = false;
+});
+
+document.getElementById('logoutBtn').addEventListener('click', ()=>auth.signOut());
 
 /* ---------- filtering / sorting ---------- */
 function applyFilters(list){
@@ -326,13 +399,7 @@ function applyFilters(list){
   return out;
 }
 function sortWithin(list){
-  const sorters = {
-    name: (a,b)=> collator(a.n,b.n),
-    'year-desc': (a,b)=> (b.y||'0').localeCompare(a.y||'0') || collator(a.n,b.n),
-    'year-asc': (a,b)=> (a.y||'9999').localeCompare(b.y||'9999') || collator(a.n,b.n),
-    console: (a,b)=> collator(a.n,b.n),
-  };
-  return list.slice().sort(sorters[state.sort] || sorters.name);
+  return list.slice().sort((a,b)=> collator(a.n,b.n));
 }
 function consoleOrder(list){
   const minYear = {}, famOf = {};
@@ -375,19 +442,13 @@ function renderSortSelect(list){
   const famOf = {};
   list.forEach(g=>{ famOf[g.p] = g.cat; });
   const plats = Array.from(new Set(list.map(g=>g.p))).sort(collator);
-  const currentValue = state.platform!=='all' ? 'plat:'+state.platform : 'sort:'+state.sort;
   sel.innerHTML = `
-    <optgroup label="Trier">
-      <option value="sort:console">Ordre du fichier (par console)</option>
-      <option value="sort:name">Titre A → Z</option>
-      <option value="sort:year-desc">Année, récent → ancien</option>
-      <option value="sort:year-asc">Année, ancien → récent</option>
-    </optgroup>
+    <option value="all">Toutes les consoles</option>
     <optgroup label="Aller à une console">
-      ${plats.map(p=>`<option value="plat:${escapeAttr(p)}" style="background-color:${CAT_HEX[famOf[p]]||'#333'};color:#fff;">${escapeHtml(p)}</option>`).join('')}
+      ${plats.map(p=>`<option value="${escapeAttr(p)}" style="background-color:${CAT_HEX[famOf[p]]||'#333'};color:#fff;">${escapeHtml(p)}</option>`).join('')}
     </optgroup>
   `;
-  sel.value = currentValue;
+  sel.value = state.platform;
 }
 function buildArtInner(g){
   if(g.img) return `<img src="${escapeAttr(g.img)}" alt="" loading="lazy" onerror="this.remove(); this.parentElement.insertAdjacentHTML('beforeend', '<span class=box-plat-tag>${escapeHtml(g.p)}</span>');">`;
@@ -487,43 +548,52 @@ function renderCard(g, editMode){
     });
   }
 
-  const previewInner = g.img ? `<img src="${escapeAttr(g.img)}" alt="" onerror="this.style.display='none';">` : `<span class="box-plat-tag">${escapeHtml(g.p||g.cat||'')}</span>`;
+  const hasImg = !!g.img;
+  const previewInner = hasImg ? `<img src="${escapeAttr(g.img)}" alt="" onerror="this.style.display='none';">` : `<span class="box-plat-tag">${escapeHtml(g.p||g.cat||'')}</span>`;
   const previewRatio = g.p ? ratioFor(g.p) : DEFAULT_RATIO;
   const previewNum = ratioNum(previewRatio);
+  const previewHintHtml = editMode ? `<div class="preview-hint">${hasImg ? 'Changer la photo' : '+ Ajouter une photo'}</div>` : '';
+  const previewRemoveHtml = (editMode && hasImg) ? `<button type="button" class="preview-remove" id="removePhotoBtn" title="Retirer la photo">✕</button>` : '';
 
   cardEl.innerHTML = `
     <div class="card-stamp">N° ${idNum}</div>
-    <div class="card-preview" id="cardPreview" style="aspect-ratio:${previewRatio};max-width:${Math.round(previewNum*260)}px;margin-left:auto;margin-right:auto;">${previewInner}</div>
+    <div class="card-preview ${editMode?'editable':''}" id="cardPreview" style="aspect-ratio:${previewRatio};max-width:${Math.round(previewNum*260)}px;margin-left:auto;margin-right:auto;">${previewInner}${previewHintHtml}${previewRemoveHtml}</div>
+    ${editMode ? '<input type="file" id="f_photofile" accept="image/*" class="sr-only">' : ''}
     <h2 class="card-title" id="cardTitle">${editMode ? '' : escapeHtml(g.n)}</h2>
     <div class="card-sub">${escapeHtml(g.cat)}${isNewEntry ? ' · Nouvelle fiche' : (g.id && g.id.startsWith('u') ? ' · Ajout personnel' : '')}</div>
     <dl class="fields">${fieldsHtml}</dl>
     <p class="card-error" id="cardError">Le titre et la plateforme sont nécessaires pour enregistrer cette fiche.</p>
-    <div id="photoZone"></div>
     <div class="card-actions" id="cardActions"></div>
   `;
 
-  if(editMode && !isNewEntry){
-    const zone = document.getElementById('photoZone');
-    zone.innerHTML = `<div class="photo-upload">
-        <label class="btn" for="f_photofile">📷 Importer une photo</label>
-        <input type="file" id="f_photofile" accept="image/*" class="sr-only">
-        <span class="photo-status" id="photoStatus"></span>
-      </div>`;
-    document.getElementById('f_photofile').addEventListener('change', async e=>{
+  if(editMode){
+    const previewEl = document.getElementById('cardPreview');
+    const fileInput = document.getElementById('f_photofile');
+    previewEl.addEventListener('click', e=>{
+      if(e.target.closest('.preview-remove')) return;
+      fileInput.click();
+    });
+    fileInput.addEventListener('change', async e=>{
       const file = e.target.files[0];
       if(!file) return;
-      const statusEl = document.getElementById('photoStatus');
-      statusEl.textContent = 'Compression en cours…';
       try{
         const dataUrl = await compressImage(file);
-        document.getElementById('f_img').value = dataUrl;
-        document.getElementById('cardPreview').innerHTML = `<img src="${dataUrl}" alt="">`;
-        statusEl.textContent = 'Photo prête ✓ — pensez à Enregistrer';
+        const vals = readForm();
+        renderCard(Object.assign({}, g, vals, {img:dataUrl}), true);
       }catch(err){
         console.error(err);
-        statusEl.textContent = err.message || "Échec de l'import";
+        alert(err.message || "Échec de l'import de la photo.");
       }
     });
+    const removeBtn = document.getElementById('removePhotoBtn');
+    if(removeBtn){
+      removeBtn.addEventListener('click', e=>{
+        e.stopPropagation();
+        if(!confirm('Retirer cette photo de la fiche ?')) return;
+        const vals = readForm();
+        renderCard(Object.assign({}, g, vals, {img:''}), true);
+      });
+    }
   }
 
   const actions = document.getElementById('cardActions');
@@ -541,7 +611,10 @@ function renderCard(g, editMode){
     editBtn.addEventListener('click', ()=>renderCard(g, true));
     const delBtn = document.createElement('button');
     delBtn.className='btn danger'; delBtn.type='button'; delBtn.textContent='Retirer du fichier';
-    delBtn.addEventListener('click', ()=>deleteCard(g, delBtn));
+    delBtn.addEventListener('click', ()=>{
+      if(!confirm(`Retirer « ${g.n} » du fichier ?`)) return;
+      deleteCard(g, delBtn);
+    });
     const closeBtn = document.createElement('button');
     closeBtn.className='btn'; closeBtn.type='button'; closeBtn.textContent='Fermer';
     closeBtn.addEventListener('click', closeCard);
@@ -608,9 +681,7 @@ document.getElementById('searchInput').addEventListener('input', e=>{
   searchTimer = setTimeout(()=>{ state.q = val; render(); }, 140);
 });
 document.getElementById('sortSelect').addEventListener('change', e=>{
-  const v = e.target.value;
-  if(v.startsWith('sort:')){ state.sort = v.slice(5); state.platform = 'all'; }
-  else if(v.startsWith('plat:')){ state.platform = v.slice(5); }
+  state.platform = e.target.value;
   render();
 });
 
