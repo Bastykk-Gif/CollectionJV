@@ -59,6 +59,10 @@ a{color:inherit;}
 .search-clear[hidden]{display:none;}
 .search-clear:hover{background:rgba(255,255,255,.1); color:var(--card);}
 .icon-btn{background:var(--panel); border:1px solid rgba(176,141,87,.32); color:var(--card); padding:9px 14px; border-radius:6px; font-family:'Inter',sans-serif; font-size:.86rem; font-weight:600; cursor:pointer; white-space:nowrap; display:inline-flex; align-items:center; gap:6px;}
+.corner-actions{position:fixed; top:12px; left:12px; z-index:60; display:flex; flex-direction:column; gap:8px;}
+.corner-btn{width:32px; height:32px; border-radius:50%; background:rgba(34,28,24,.55); border:1px solid rgba(176,141,87,.3); color:var(--muted); font-size:.92rem; cursor:pointer; display:flex; align-items:center; justify-content:center; opacity:.65; transition:opacity .15s ease, color .15s ease;}
+.corner-btn:hover, .corner-btn:focus-visible{opacity:1; color:var(--card); border-color:var(--brass-light);}
+.corner-btn[hidden]{display:none;}
 .icon-btn:hover{border-color:var(--brass-light);}
 .icon-btn:focus-visible{outline:2px solid var(--brass-light); outline-offset:1px;}
 .row2{display:flex; gap:10px; flex-wrap:wrap; align-items:center;}
@@ -129,6 +133,7 @@ a{color:inherit;}
 
 /* ---------- FAB ---------- */
 .fab{position:fixed; right:20px; bottom:20px; width:56px; height:56px; border-radius:50%; background:var(--brass); color:#1B140D; font-family:'Anton',sans-serif; font-size:1.8rem; border:none; box-shadow:0 10px 24px rgba(0,0,0,.5); cursor:pointer; z-index:50; display:flex; align-items:center; justify-content:center; line-height:1;}
+.is-readonly .fab{display:none;}
 .fab:hover{transform:translateY(-2px);}
 .fab:focus-visible{outline:3px solid var(--card);}
 .fab:disabled{opacity:.4; cursor:not-allowed;}
@@ -232,7 +237,9 @@ a{color:inherit;}
 .auth-submit{width:100%; background:var(--ink); color:var(--card); border:none; padding:12px; border-radius:6px; font-family:'Inter',sans-serif; font-weight:700; font-size:.92rem; cursor:pointer; margin-top:4px;}
 .auth-submit:hover{opacity:.85;}
 .auth-submit:disabled{opacity:.5; cursor:not-allowed;}
-.logout-btn{margin-left:auto;}
+.auth-guest{width:100%; background:none; color:var(--ink-soft); border:none; padding:10px; font-family:'Inter',sans-serif; font-weight:600; font-size:.82rem; cursor:pointer; margin-top:10px; text-decoration:underline;}
+.auth-guest:hover{color:var(--ink);}
+.visitor-badge{display:inline-block; margin-left:8px; padding:2px 8px; border-radius:10px; background:rgba(176,141,87,.22); color:var(--card); font-family:'Inter',sans-serif; font-size:.68rem; font-weight:700; text-transform:uppercase; letter-spacing:.03em; vertical-align:middle;}
 </style>
 </head>
 <body>
@@ -253,12 +260,13 @@ a{color:inherit;}
       <p class="auth-error" id="authError"></p>
       <button type="submit" class="auth-submit">Se connecter</button>
     </form>
+    <button type="button" class="auth-guest" id="guestBtn">Continuer en mode visiteur (lecture seule)</button>
   </div>
 </div>
 
 <header class="hero">
   <div class="hero-inner">
-    <h1 class="hero-title">COLLECTION DE JV</h1>
+    <h1 class="hero-title">COLLECTION DE JV<span class="visitor-badge" id="visitorBadge" hidden>Mode visiteur</span></h1>
     <p class="hero-sub">Le catalogue de la collection vidéoludique d'Olivier</p>
     <div class="ticker">
       <div class="ticker-num" id="tickerCount"></div>
@@ -268,6 +276,11 @@ a{color:inherit;}
   </div>
 </header>
 
+<div class="corner-actions">
+  <button class="corner-btn" id="exportBtn" type="button" title="Télécharger une copie de secours (avec les photos)" aria-label="Télécharger une copie de secours">⭳</button>
+  <button class="corner-btn" id="logoutBtn" type="button" title="Se déconnecter" aria-label="Se déconnecter">⎋</button>
+</div>
+
 <nav class="controls">
   <div class="row1">
     <button class="icon-btn sidebar-toggle-btn" id="sidebarToggleBtn" type="button">☰ Consoles</button>
@@ -275,8 +288,6 @@ a{color:inherit;}
       <button type="button" class="search-clear" id="searchClear" aria-label="Effacer la recherche" hidden>✕</button>
       <input id="searchInput" type="text" placeholder="Rechercher un titre, un éditeur, une franchise…" autocomplete="off">
     </div>
-    <button class="icon-btn" id="exportBtn" type="button" title="Télécharger une copie du catalogue">⭳ Copie de secours</button>
-    <button class="icon-btn logout-btn" id="logoutBtn" type="button" title="Se déconnecter">⎋ Déconnexion</button>
   </div>
   <div class="row2">
     <span class="result-count" id="resultCount"></span>
@@ -687,7 +698,7 @@ function subscribe(){
 async function init(){
   setStatus('connecting');
   try{
-    await ensureSeeded();
+    if(!isReadOnly()) await ensureSeeded();
     subscribe();
   }catch(err){
     console.error(err);
@@ -702,12 +713,26 @@ const authForm = document.getElementById('authForm');
 const authError = document.getElementById('authError');
 let appStarted = false;
 
+function isReadOnly(){ return !!(auth.currentUser && auth.currentUser.isAnonymous); }
+
 auth.onAuthStateChanged(user=>{
   if(user){
     authGate.hidden = true;
+    document.body.classList.toggle('is-readonly', isReadOnly());
+    document.getElementById('visitorBadge').hidden = !isReadOnly();
     if(!appStarted){ appStarted = true; init(); }
   } else {
     authGate.hidden = false;
+  }
+});
+
+document.getElementById('guestBtn').addEventListener('click', async ()=>{
+  authError.textContent = '';
+  try{
+    await auth.signInAnonymously();
+  }catch(err){
+    console.error(err);
+    authError.textContent = "Mode visiteur indisponible pour le moment.";
   }
 });
 
@@ -880,11 +905,13 @@ function render(){
   if(filtered.length===0){
     const empty = document.createElement('div');
     empty.className = 'empty-state';
-    empty.innerHTML = `<h3>Aucune fiche ne correspond</h3>
+    empty.innerHTML = isReadOnly()
+      ? `<h3>Aucune fiche ne correspond</h3><p>Essayez un autre terme de recherche.</p>`
+      : `<h3>Aucune fiche ne correspond</h3>
       <p>Essayez un autre terme, ou ajoutez directement cette référence au fichier.</p>
       <button class="btn primary" id="emptyAddBtn" type="button">+ Ajouter au fichier</button>`;
     shelf.appendChild(empty);
-    document.getElementById('emptyAddBtn').addEventListener('click', ()=>openCard(null, true));
+    if(!isReadOnly()) document.getElementById('emptyAddBtn').addEventListener('click', ()=>openCard(null, true));
     return;
   }
 
@@ -913,6 +940,7 @@ function closeCard(){ overlay.hidden = true; cardEl.innerHTML=''; if(lastFocused
 function findGame(id){ return allGames.find(g=>g.id===id); }
 
 function openCard(id, isNew=false){
+  if(isNew && isReadOnly()) return;
   lastFocused = document.activeElement;
   let defaultP = '', defaultCat = 'Nintendo';
   if(state.mode === 'platform'){
@@ -949,6 +977,7 @@ function buildComboField(key, label, currentValue, options, required){
 }
 
 function renderCard(g, editMode){
+  editMode = editMode && !isReadOnly();
   cardEl.style.setProperty('--accent', `var(${CAT_VAR[g.cat] || '--brass'})`);
   const isNewEntry = !g.id;
   const idNum = g.id ? g.id.replace(/[^0-9]/g,'').slice(-4).padStart(4,'0') : '????';
@@ -1061,6 +1090,13 @@ function renderCard(g, editMode){
     cancelBtn.addEventListener('click', ()=> isNewEntry ? closeCard() : renderCard(g, false));
     actions.appendChild(saveBtn); actions.appendChild(cancelBtn);
   } else {
+    const closeBtn = document.createElement('button');
+    closeBtn.className='btn'; closeBtn.type='button'; closeBtn.textContent='Fermer';
+    closeBtn.addEventListener('click', closeCard);
+    if(isReadOnly()){
+      actions.appendChild(closeBtn);
+      return;
+    }
     const editBtn = document.createElement('button');
     editBtn.className='btn'; editBtn.type='button'; editBtn.textContent='Modifier';
     editBtn.addEventListener('click', ()=>renderCard(g, true));
@@ -1070,9 +1106,6 @@ function renderCard(g, editMode){
       if(!confirm(`Retirer « ${g.n} » du fichier ?`)) return;
       deleteCard(g, delBtn);
     });
-    const closeBtn = document.createElement('button');
-    closeBtn.className='btn'; closeBtn.type='button'; closeBtn.textContent='Fermer';
-    closeBtn.addEventListener('click', closeCard);
     actions.appendChild(editBtn); actions.appendChild(delBtn); actions.appendChild(closeBtn);
   }
 }
@@ -1096,6 +1129,7 @@ function readForm(){
 }
 
 async function saveCard(g, isNewEntry, btn){
+  if(isReadOnly()) return;
   const vals = readForm();
   vals.img = g.img || '';
   if(!vals.n || !vals.p){ document.getElementById('cardError').classList.add('show'); return; }
@@ -1119,6 +1153,7 @@ async function saveCard(g, isNewEntry, btn){
 }
 
 async function deleteCard(g, btn){
+  if(isReadOnly()) return;
   btn.disabled = true;
   const snapshot = Object.assign({}, g);
   delete snapshot.id;
