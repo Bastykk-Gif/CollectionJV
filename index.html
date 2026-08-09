@@ -164,10 +164,27 @@ a{color:inherit;}
 .card-preview.editable:hover .preview-hint, .card-preview.editable:focus-visible .preview-hint{opacity:1;}
 .preview-remove{position:absolute; top:7px; right:7px; width:28px; height:28px; border-radius:50%; background:rgba(0,0,0,.65); color:#fff; border:none; font-size:.85rem; cursor:pointer; display:flex; align-items:center; justify-content:center; z-index:2;}
 .preview-remove:hover{background:var(--stamp);}
+.preview-camera{position:absolute; bottom:7px; right:7px; width:38px; height:38px; border-radius:50%; background:rgba(0,0,0,.65); color:#fff; border:none; font-size:1.05rem; cursor:pointer; display:flex; align-items:center; justify-content:center; z-index:2;}
+.preview-camera:hover{background:var(--brass);}
 
 .lightbox-overlay{position:fixed; inset:0; background:rgba(6,5,4,.9); z-index:300; display:flex; align-items:center; justify-content:center; padding:26px; cursor:zoom-out;}
 .lightbox-overlay[hidden]{display:none;}
 .lightbox-overlay img{max-width:92vw; max-height:92vh; object-fit:contain; border-radius:6px; box-shadow:0 20px 60px rgba(0,0,0,.6);}
+
+/* ---------- RECADRAGE PERSPECTIVE (4 points) ---------- */
+.crop-overlay{position:fixed; inset:0; background:rgba(6,5,4,.94); z-index:320; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:16px; gap:14px;}
+.crop-overlay[hidden]{display:none;}
+.crop-stage{position:relative; max-width:min(92vw,560px); max-height:70vh; touch-action:none;}
+.crop-stage canvas{display:block; max-width:100%; max-height:70vh; width:auto; height:auto; border-radius:4px;}
+.crop-stage svg{position:absolute; inset:0; width:100%; height:100%;}
+.crop-quad{fill:rgba(176,141,87,.18); stroke:var(--brass-light); stroke-width:2; vector-effect:non-scaling-stroke;}
+.crop-handle{fill:var(--brass-light); stroke:#1b140d; stroke-width:2; vector-effect:non-scaling-stroke; cursor:grab; touch-action:none;}
+.crop-handle:active{cursor:grabbing; fill:#fff;}
+.crop-hint{color:var(--muted); font-family:'Inter',sans-serif; font-size:.82rem; text-align:center; max-width:480px;}
+.crop-actions{display:flex; gap:10px;}
+.crop-actions button{font-family:'Inter',sans-serif; font-weight:600; font-size:.9rem; padding:11px 20px; border-radius:6px; border:1px solid var(--brass); background:transparent; color:var(--card); cursor:pointer;}
+.crop-actions button.primary{background:var(--brass); color:#1b140d;}
+.crop-actions button:disabled{opacity:.5; cursor:not-allowed;}
 
 .combo-select{display:block; width:100%;}
 .combo-new-input{width:100%; margin-top:6px;}
@@ -287,6 +304,18 @@ a{color:inherit;}
 
 <div class="lightbox-overlay" id="lightboxOverlay" hidden>
   <img id="lightboxImg" src="" alt="">
+</div>
+
+<div class="crop-overlay" id="cropOverlay" hidden>
+  <div class="crop-stage" id="cropStage">
+    <canvas id="cropCanvas"></canvas>
+    <svg id="cropSvg"></svg>
+  </div>
+  <p class="crop-hint">Faites glisser les 4 points sur les coins de la jaquette : la photo sera redressée automatiquement.</p>
+  <div class="crop-actions">
+    <button type="button" id="cropCancelBtn">Annuler</button>
+    <button type="button" id="cropConfirmBtn" class="primary">Valider</button>
+  </div>
 </div>
 
 <script>
@@ -410,6 +439,176 @@ async function handleDroppedImage(dt){
     return url; // image inaccessible en JS (CORS) : on conserve simplement l'URL externe
   }
 }
+
+/* ---------- recadrage perspective à 4 points (photo prise au téléphone) ---------- */
+function loadWorkingCanvas(file, maxDim=1600){
+  return new Promise((resolve, reject)=>{
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = ()=>{
+      let { width, height } = img;
+      if(width > maxDim || height > maxDim){
+        if(width > height){ height = Math.round(height * maxDim/width); width = maxDim; }
+        else { width = Math.round(width * maxDim/height); height = maxDim; }
+      }
+      const canvas = document.createElement('canvas');
+      canvas.width = width; canvas.height = height;
+      canvas.getContext('2d').drawImage(img, 0, 0, width, height);
+      URL.revokeObjectURL(url);
+      resolve(canvas);
+    };
+    img.onerror = ()=>{ URL.revokeObjectURL(url); reject(new Error('Lecture de l\'image impossible')); };
+    img.src = url;
+  });
+}
+
+// Résout le système linéaire (élimination de Gauss avec pivot partiel).
+function solveLinearSystem(A, B){
+  const n = A.length;
+  const M = A.map((row, i)=>[...row, B[i]]);
+  for(let col=0; col<n; col++){
+    let pivot = col;
+    for(let r=col+1; r<n; r++) if(Math.abs(M[r][col]) > Math.abs(M[pivot][col])) pivot = r;
+    [M[col], M[pivot]] = [M[pivot], M[col]];
+    const div = M[col][col];
+    for(let c=col; c<=n; c++) M[col][c] /= div;
+    for(let r=0; r<n; r++){
+      if(r === col) continue;
+      const factor = M[r][col];
+      for(let c=col; c<=n; c++) M[r][c] -= factor * M[col][c];
+    }
+  }
+  return M.map(row=>row[n]);
+}
+// Calcule les 8 coefficients de l'homographie qui envoie chaque point de `src` sur `dst`.
+function solveHomography(src, dst){
+  const A = [], B = [];
+  for(let i=0; i<4; i++){
+    const [x,y] = src[i], [X,Y] = dst[i];
+    A.push([x, y, 1, 0, 0, 0, -x*X, -y*X]); B.push(X);
+    A.push([0, 0, 0, x, y, 1, -x*Y, -y*Y]); B.push(Y);
+  }
+  return solveLinearSystem(A, B);
+}
+// Redresse le quadrilatère `srcQuad` (dans sourceCanvas) en un rectangle outW×outH.
+function warpPerspective(sourceCanvas, srcQuad, outW, outH){
+  const dstQuad = [[0,0],[outW,0],[outW,outH],[0,outH]];
+  const [a,b,c,d,e,f,gg,h] = solveHomography(dstQuad, srcQuad); // mapping dst -> src
+  const sW = sourceCanvas.width, sH = sourceCanvas.height;
+  const sData = sourceCanvas.getContext('2d').getImageData(0, 0, sW, sH).data;
+  const outCanvas = document.createElement('canvas');
+  outCanvas.width = outW; outCanvas.height = outH;
+  const octx = outCanvas.getContext('2d');
+  const oImg = octx.createImageData(outW, outH);
+  const oData = oImg.data;
+  for(let v=0; v<outH; v++){
+    for(let u=0; u<outW; u++){
+      const denom = gg*u + h*v + 1;
+      const sx = (a*u + b*v + c) / denom;
+      const sy = (d*u + e*v + f) / denom;
+      const oi = (v*outW + u) * 4;
+      if(sx < 0 || sy < 0 || sx >= sW-1 || sy >= sH-1){ oData[oi+3] = 0; continue; }
+      const x0 = Math.floor(sx), y0 = Math.floor(sy), fx = sx-x0, fy = sy-y0;
+      const x1 = x0+1, y1 = y0+1;
+      for(let ch=0; ch<4; ch++){
+        const p00=sData[(y0*sW+x0)*4+ch], p10=sData[(y0*sW+x1)*4+ch], p01=sData[(y1*sW+x0)*4+ch], p11=sData[(y1*sW+x1)*4+ch];
+        const top = p00 + (p10-p00)*fx, bot = p01 + (p11-p01)*fx;
+        oData[oi+ch] = Math.round(top + (bot-top)*fy);
+      }
+    }
+  }
+  octx.putImageData(oImg, 0, 0);
+  return outCanvas;
+}
+
+const cropOverlayEl = document.getElementById('cropOverlay');
+const cropCanvasEl = document.getElementById('cropCanvas');
+const cropSvgEl = document.getElementById('cropSvg');
+let cropWorkingCanvas = null;
+let cropPoints = null; // [[x,y] x4] dans l'espace pixel de cropWorkingCanvas, ordre TL,TR,BR,BL
+let cropOnConfirm = null;
+let cropDragIndex = -1;
+
+function svgPointFromEvent(evt){
+  const pt = cropSvgEl.createSVGPoint();
+  pt.x = evt.clientX; pt.y = evt.clientY;
+  return pt.matrixTransform(cropSvgEl.getScreenCTM().inverse());
+}
+function cropHandleRadius(){
+  const w = cropWorkingCanvas.width, h = cropWorkingCanvas.height;
+  return Math.round(Math.max(w,h)*0.018) + 8;
+}
+// Construit les éléments SVG une seule fois (les recréer à chaque pointermove romprait
+// la capture du pointeur en cours de glisser sur mobile).
+function buildCropSvg(){
+  const quadPath = cropPoints.map(p=>p.join(',')).join(' ');
+  const r = cropHandleRadius();
+  const handles = cropPoints.map((p,i)=>`<circle class="crop-handle" data-i="${i}" cx="${p[0]}" cy="${p[1]}" r="${r}"></circle>`).join('');
+  cropSvgEl.innerHTML = `<polygon class="crop-quad" points="${quadPath}"></polygon>${handles}`;
+  cropSvgEl.querySelectorAll('.crop-handle').forEach(c=>{
+    const i = Number(c.dataset.i);
+    c.addEventListener('pointerdown', e=>{
+      e.preventDefault();
+      cropDragIndex = i;
+      c.setPointerCapture(e.pointerId);
+    });
+    c.addEventListener('pointermove', e=>{
+      if(cropDragIndex !== i) return;
+      e.preventDefault();
+      const w = cropWorkingCanvas.width, h = cropWorkingCanvas.height;
+      const p = svgPointFromEvent(e);
+      cropPoints[i] = [Math.min(Math.max(p.x,0),w), Math.min(Math.max(p.y,0),h)];
+      updateCropSvg();
+    });
+    c.addEventListener('pointerup', ()=>{ cropDragIndex = -1; });
+    c.addEventListener('pointercancel', ()=>{ cropDragIndex = -1; });
+  });
+}
+// Ne fait que déplacer les points existants (pas de recréation DOM) pendant le glisser.
+function updateCropSvg(){
+  cropSvgEl.querySelector('.crop-quad').setAttribute('points', cropPoints.map(p=>p.join(',')).join(' '));
+  cropSvgEl.querySelectorAll('.crop-handle').forEach(c=>{
+    const p = cropPoints[Number(c.dataset.i)];
+    c.setAttribute('cx', p[0]); c.setAttribute('cy', p[1]);
+  });
+}
+function openCropOverlay(file, onConfirm){
+  loadWorkingCanvas(file).then(canvas=>{
+    cropWorkingCanvas = canvas;
+    cropOnConfirm = onConfirm;
+    cropCanvasEl.width = canvas.width; cropCanvasEl.height = canvas.height;
+    cropCanvasEl.getContext('2d').drawImage(canvas, 0, 0);
+    cropSvgEl.setAttribute('viewBox', `0 0 ${canvas.width} ${canvas.height}`);
+    const mx = Math.round(canvas.width*0.03), my = Math.round(canvas.height*0.03);
+    cropPoints = [[mx,my],[canvas.width-mx,my],[canvas.width-mx,canvas.height-my],[mx,canvas.height-my]];
+    buildCropSvg();
+    cropOverlayEl.hidden = false;
+  }).catch(err=>{
+    alert(err.message || "Impossible de charger cette photo.");
+  });
+}
+function closeCropOverlay(){
+  cropOverlayEl.hidden = true;
+  cropWorkingCanvas = null; cropPoints = null; cropOnConfirm = null;
+}
+document.getElementById('cropCancelBtn').addEventListener('click', closeCropOverlay);
+document.getElementById('cropConfirmBtn').addEventListener('click', async ()=>{
+  const [tl,tr,br,bl] = cropPoints;
+  const dist = (p,q)=>Math.hypot(p[0]-q[0], p[1]-q[1]);
+  const outW = Math.round(Math.max(dist(tl,tr), dist(bl,br))) || 1;
+  const outH = Math.round(Math.max(dist(tl,bl), dist(tr,br))) || 1;
+  const onConfirm = cropOnConfirm;
+  try{
+    const warped = warpPerspective(cropWorkingCanvas, cropPoints, outW, outH);
+    const blob = await new Promise(res=>warped.toBlob(res, 'image/jpeg', 0.92));
+    const dataUrl = await compressImage(blob);
+    closeCropOverlay();
+    onConfirm(dataUrl);
+  }catch(err){
+    console.error(err);
+    alert(err.message || "Échec du recadrage.");
+  }
+});
 
 /* ---------- connection status ---------- */
 function setStatus(kind, text){
@@ -742,12 +941,13 @@ function renderCard(g, editMode){
   const previewNum = ratioNum(previewRatio);
   const previewHintHtml = editMode ? `<div class="preview-hint">${hasImg ? 'Changer la photo (clic ou glisser-déposer)' : '+ Ajouter une photo (clic ou glisser-déposer)'}</div>` : '';
   const previewRemoveHtml = (editMode && hasImg) ? `<button type="button" class="preview-remove" id="removePhotoBtn" title="Retirer la photo">✕</button>` : '';
+  const previewCameraHtml = editMode ? `<button type="button" class="preview-camera" id="cameraPhotoBtn" title="Prendre une photo">📷</button>` : '';
   const previewClass = editMode ? 'editable' : (hasImg ? 'viewable' : '');
 
   cardEl.innerHTML = `
     <div class="card-stamp">N° ${idNum}</div>
-    <div class="card-preview ${previewClass}" id="cardPreview" style="aspect-ratio:${previewRatio};max-width:${Math.round(previewNum*260)}px;margin-left:auto;margin-right:auto;">${previewInner}${previewHintHtml}${previewRemoveHtml}</div>
-    ${editMode ? '<input type="file" id="f_photofile" accept="image/*" class="sr-only">' : ''}
+    <div class="card-preview ${previewClass}" id="cardPreview" style="aspect-ratio:${previewRatio};max-width:${Math.round(previewNum*260)}px;margin-left:auto;margin-right:auto;">${previewInner}${previewHintHtml}${previewRemoveHtml}${previewCameraHtml}</div>
+    ${editMode ? '<input type="file" id="f_photofile" accept="image/*" class="sr-only"><input type="file" id="f_photocamera" accept="image/*" capture="environment" class="sr-only">' : ''}
     <h2 class="card-title" id="cardTitle">${editMode ? '' : escapeHtml(g.n)}</h2>
     <div class="card-sub">${escapeHtml(g.cat)}${isNewEntry ? ' · Nouvelle fiche' : (g.id && g.id.startsWith('u') ? ' · Ajout personnel' : '')}</div>
     <dl class="fields">${fieldsHtml}</dl>
@@ -758,9 +958,14 @@ function renderCard(g, editMode){
   if(editMode){
     const previewEl = document.getElementById('cardPreview');
     const fileInput = document.getElementById('f_photofile');
+    const cameraInput = document.getElementById('f_photocamera');
     previewEl.addEventListener('click', e=>{
-      if(e.target.closest('.preview-remove')) return;
+      if(e.target.closest('.preview-remove') || e.target.closest('.preview-camera')) return;
       fileInput.click();
+    });
+    document.getElementById('cameraPhotoBtn').addEventListener('click', e=>{
+      e.stopPropagation();
+      cameraInput.click();
     });
     previewEl.addEventListener('dragover', e=>{
       e.preventDefault();
@@ -779,18 +984,17 @@ function renderCard(g, editMode){
         alert(err.message || "Échec de l'import de la photo.");
       }
     });
-    fileInput.addEventListener('change', async e=>{
+    const onLocalFile = e=>{
       const file = e.target.files[0];
+      e.target.value = '';
       if(!file) return;
-      try{
-        const dataUrl = await compressImage(file);
+      openCropOverlay(file, dataUrl=>{
         const vals = readForm();
         renderCard(Object.assign({}, g, vals, {img:dataUrl}), true);
-      }catch(err){
-        console.error(err);
-        alert(err.message || "Échec de l'import de la photo.");
-      }
-    });
+      });
+    };
+    fileInput.addEventListener('change', onLocalFile);
+    cameraInput.addEventListener('change', onLocalFile);
     const removeBtn = document.getElementById('removePhotoBtn');
     if(removeBtn){
       removeBtn.addEventListener('click', e=>{
