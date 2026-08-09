@@ -690,8 +690,14 @@ function subscribe(){
     render();
   }, err=>{
     console.error(err);
-    setStatus('error', 'Connexion impossible — vérifiez les règles Firestore');
-    document.getElementById('shelf').innerHTML = `<div class="loading-state">Impossible de charger le fichier depuis Firebase.<br>Vérifiez que Firestore est activé et que les règles de sécurité autorisent la lecture.</div>`;
+    // Le fichier est déjà chargé : une coupure du flux temps réel (quota, réseau) ne doit
+    // pas effacer ce qui est déjà affiché, juste prévenir que la synchronisation est coupée.
+    if(allGames.length > 0){
+      setStatus('error', 'Synchronisation interrompue — les données affichées datent d\'avant la coupure');
+    } else {
+      setStatus('error', 'Connexion impossible — vérifiez les règles Firestore');
+      document.getElementById('shelf').innerHTML = `<div class="loading-state">Impossible de charger le fichier depuis Firebase.<br>Vérifiez que Firestore est activé et que les règles de sécurité autorisent la lecture.</div>`;
+    }
   });
 }
 
