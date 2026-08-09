@@ -51,16 +51,49 @@ a{color:inherit;}
 /* ---------- TOOLBAR ---------- */
 .controls{position:sticky; top:0; z-index:30; background:rgba(20,17,16,.95); backdrop-filter:blur(8px); border-bottom:1px solid rgba(176,141,87,.22); padding:12px 20px; display:flex; flex-direction:column; gap:10px;}
 .row1{display:flex; gap:10px; flex-wrap:wrap; align-items:center;}
-.search-row{flex:1 1 240px;}
-.search-row input{width:100%; background:var(--panel); border:1px solid rgba(176,141,87,.32); color:var(--card); padding:11px 14px; border-radius:6px; font-family:'Inter',sans-serif; font-size:.95rem;}
+.search-row{flex:1 1 240px; position:relative;}
+.search-row input{width:100%; background:var(--panel); border:1px solid rgba(176,141,87,.32); color:var(--card); padding:11px 14px 11px 38px; border-radius:6px; font-family:'Inter',sans-serif; font-size:.95rem;}
 .search-row input::placeholder{color:var(--muted);}
 .search-row input:focus-visible{outline:2px solid var(--brass-light); outline-offset:1px;}
+.search-clear{position:absolute; left:8px; top:50%; transform:translateY(-50%); width:24px; height:24px; border-radius:50%; background:none; border:none; color:var(--muted); font-size:.82rem; cursor:pointer; display:flex; align-items:center; justify-content:center;}
+.search-clear[hidden]{display:none;}
+.search-clear:hover{background:rgba(255,255,255,.1); color:var(--card);}
 .icon-btn{background:var(--panel); border:1px solid rgba(176,141,87,.32); color:var(--card); padding:9px 14px; border-radius:6px; font-family:'Inter',sans-serif; font-size:.86rem; font-weight:600; cursor:pointer; white-space:nowrap; display:inline-flex; align-items:center; gap:6px;}
 .icon-btn:hover{border-color:var(--brass-light);}
 .icon-btn:focus-visible{outline:2px solid var(--brass-light); outline-offset:1px;}
 .row2{display:flex; gap:10px; flex-wrap:wrap; align-items:center;}
-.row2 select{background:var(--panel); border:1px solid rgba(176,141,87,.32); color:var(--card); padding:9px 12px; border-radius:6px; font-family:'Inter',sans-serif; font-size:.9rem; max-width:280px;}
 .result-count{margin-left:auto; font-family:'Inter',sans-serif; font-size:.82rem; color:var(--muted);}
+
+/* ---------- SIDEBAR ---------- */
+.app-shell{display:flex; align-items:flex-start;}
+.main-column{flex:1; min-width:0;}
+.sidebar{width:240px; flex:0 0 240px; background:var(--bg-soft); border-right:1px solid rgba(176,141,87,.2); position:sticky; top:0; height:100vh; overflow-y:auto; padding:18px 0 40px;}
+.sidebar-header{display:none;}
+.nav-menu{display:flex; flex-direction:column;}
+.nav-all{padding:10px 18px; font-family:'Inter',sans-serif; font-weight:700; font-size:.92rem; color:var(--card); text-decoration:none; border-left:4px solid transparent; margin-bottom:12px; cursor:pointer;}
+.nav-all:hover{background:rgba(176,141,87,.1);}
+.nav-all.active{background:rgba(176,141,87,.18); border-left-color:var(--brass);}
+.nav-family{margin-bottom:6px;}
+.nav-fam-link{display:block; padding:9px 18px; font-family:'Inter',sans-serif; font-weight:700; font-size:.85rem; text-transform:uppercase; letter-spacing:.03em; color:var(--card); text-decoration:none; border-left:4px solid transparent; cursor:pointer;}
+.nav-fam-link:hover{background:rgba(176,141,87,.1);}
+.nav-fam-link.active{background:rgba(176,141,87,.18);}
+.nav-consoles{display:flex; flex-direction:column;}
+.nav-plat-link{display:block; padding:7px 18px 7px 30px; font-family:'Inter',sans-serif; font-size:.82rem; color:var(--muted); text-decoration:none; border-left:4px solid transparent; cursor:pointer;}
+.nav-plat-link:hover{background:rgba(176,141,87,.08); color:var(--card);}
+.nav-plat-link.active{background:rgba(176,141,87,.16); color:var(--card); font-weight:600;}
+.sidebar-toggle-btn{display:none;}
+.sidebar-backdrop{display:none;}
+@media (max-width:880px){
+  .app-shell{display:block;}
+  .sidebar{position:fixed; top:0; left:0; height:100vh; width:270px; z-index:400; transform:translateX(-100%); transition:transform .22s ease; box-shadow:0 0 40px rgba(0,0,0,.5);}
+  .sidebar.open{transform:translateX(0);}
+  .sidebar-header{display:flex; align-items:center; justify-content:space-between; padding:14px 16px; border-bottom:1px solid rgba(176,141,87,.2); margin-bottom:6px;}
+  .sidebar-title{font-family:'Anton',sans-serif; font-size:1.1rem;}
+  .sidebar-close{background:none; border:none; color:var(--card); font-size:1.1rem; cursor:pointer; padding:4px;}
+  .sidebar-toggle-btn{display:inline-flex;}
+  .sidebar-backdrop{display:block; position:fixed; inset:0; background:rgba(0,0,0,.6); z-index:390;}
+  .sidebar-backdrop[hidden]{display:none;}
+}
 
 /* ---------- SHELF ---------- */
 .shelf{padding:6px 20px 110px; max-width:1400px; margin:0 auto;}
@@ -96,6 +129,11 @@ a{color:inherit;}
 .fab:focus-visible{outline:3px solid var(--card);}
 .fab:disabled{opacity:.4; cursor:not-allowed;}
 
+.scroll-top-btn{position:fixed; right:24px; bottom:88px; width:46px; height:46px; border-radius:50%; background:var(--panel); border:1px solid rgba(176,141,87,.4); color:var(--card); font-size:1.25rem; cursor:pointer; z-index:49; display:flex; align-items:center; justify-content:center; box-shadow:0 8px 20px rgba(0,0,0,.4); opacity:0; pointer-events:none; transform:translateY(8px); transition:opacity .2s ease, transform .2s ease;}
+.scroll-top-btn.show{opacity:1; pointer-events:auto; transform:translateY(0);}
+.scroll-top-btn:hover{border-color:var(--brass-light);}
+.scroll-top-btn:focus-visible{outline:2px solid var(--brass-light); outline-offset:2px;}
+
 /* ---------- MODAL ---------- */
 .modal-overlay{position:fixed; inset:0; background:rgba(8,6,5,.72); backdrop-filter:blur(3px); display:flex; align-items:center; justify-content:center; padding:20px; z-index:100;}
 .modal-overlay[hidden]{display:none;}
@@ -126,8 +164,9 @@ a{color:inherit;}
 .lightbox-overlay[hidden]{display:none;}
 .lightbox-overlay img{max-width:92vw; max-height:92vh; object-fit:contain; border-radius:6px; box-shadow:0 20px 60px rgba(0,0,0,.6);}
 
-.combo-select, .combo-new-input{display:block; width:100%;}
-.combo-new-input{margin-top:6px;}
+.combo-select{display:block; width:100%;}
+.combo-new-input{width:100%; margin-top:6px;}
+.combo-new-input[hidden]{display:none !important;}
 .card-actions{display:flex; gap:9px; margin-top:18px; flex-wrap:wrap;}
 .btn{font-family:'Inter',sans-serif; font-weight:600; font-size:.88rem; padding:10px 16px; border-radius:6px; border:1px solid var(--ink); background:transparent; color:var(--ink); cursor:pointer;}
 .btn.primary{background:var(--ink); color:var(--card); border-color:var(--ink);}
@@ -193,36 +232,51 @@ a{color:inherit;}
   </div>
 </div>
 
-<header class="hero">
-  <div class="hero-inner">
-    <p class="eyebrow">CLASSÉ PAR CONSOLE · 1977 → AUJOURD'HUI</p>
-    <h1 class="hero-title">COLLECTION DE JV</h1>
-    <p class="hero-sub">Le catalogue de la collection vidéoludique</p>
-    <div class="ticker">
-      <div class="ticker-num" id="tickerCount"></div>
-      <div class="ticker-label">jeux<br>répertoriés</div>
+<div class="app-shell">
+  <div class="sidebar-backdrop" id="sidebarBackdrop" hidden></div>
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-header">
+      <span class="sidebar-title">Collection de JV</span>
+      <button class="sidebar-close" id="sidebarClose" type="button" aria-label="Fermer le menu">✕</button>
     </div>
-    <div class="status-line connecting" id="statusLine"><span class="status-dot"></span><span id="statusText">Connexion au fichier…</span></div>
-  </div>
-</header>
+    <nav class="nav-menu" id="navMenu"></nav>
+  </aside>
 
-<nav class="controls">
-  <div class="row1">
-    <div class="search-row">
-      <input id="searchInput" type="text" placeholder="Rechercher un titre, un éditeur, une franchise…" autocomplete="off">
-    </div>
-    <button class="icon-btn" id="exportBtn" type="button" title="Télécharger une copie du catalogue">⭳ Copie de secours</button>
-    <button class="icon-btn logout-btn" id="logoutBtn" type="button" title="Se déconnecter">⎋ Déconnexion</button>
-  </div>
-  <div class="row2">
-    <select id="sortSelect" aria-label="Aller à une console"></select>
-    <span class="result-count" id="resultCount"></span>
-  </div>
-</nav>
+  <div class="main-column">
+    <header class="hero">
+      <div class="hero-inner">
+        <p class="eyebrow">CLASSÉ PAR CONSOLE · 1977 → AUJOURD'HUI</p>
+        <h1 class="hero-title">COLLECTION DE JV</h1>
+        <p class="hero-sub">Le catalogue de la collection vidéoludique</p>
+        <div class="ticker">
+          <div class="ticker-num" id="tickerCount"></div>
+          <div class="ticker-label">jeux<br>répertoriés</div>
+        </div>
+        <div class="status-line connecting" id="statusLine"><span class="status-dot"></span><span id="statusText">Connexion au fichier…</span></div>
+      </div>
+    </header>
 
-<main id="shelf" class="shelf"><div class="loading-state">Chargement du fichier…</div></main>
+    <nav class="controls">
+      <div class="row1">
+        <button class="icon-btn sidebar-toggle-btn" id="sidebarToggleBtn" type="button">☰ Consoles</button>
+        <div class="search-row">
+          <button type="button" class="search-clear" id="searchClear" aria-label="Effacer la recherche" hidden>✕</button>
+          <input id="searchInput" type="text" placeholder="Rechercher un titre, un éditeur, une franchise…" autocomplete="off">
+        </div>
+        <button class="icon-btn" id="exportBtn" type="button" title="Télécharger une copie du catalogue">⭳ Copie de secours</button>
+        <button class="icon-btn logout-btn" id="logoutBtn" type="button" title="Se déconnecter">⎋ Déconnexion</button>
+      </div>
+      <div class="row2">
+        <span class="result-count" id="resultCount"></span>
+      </div>
+    </nav>
+
+    <main id="shelf" class="shelf"><div class="loading-state">Chargement du fichier…</div></main>
+  </div>
+</div>
 
 <button id="addBtn" class="fab" aria-label="Ajouter un jeu au fichier" disabled>+</button>
+<button id="scrollTopBtn" class="scroll-top-btn" type="button" aria-label="Remonter en haut de page" title="Remonter en haut de page">↑</button>
 <div class="toast" id="toast"><span id="toastMsg"></span><button id="toastUndo" class="toast-undo" type="button">Annuler</button></div>
 
 <div id="modalOverlay" class="modal-overlay" hidden>
@@ -409,6 +463,13 @@ document.getElementById('logoutBtn').addEventListener('click', ()=>auth.signOut(
 function sortWithin(list){
   return list.slice().sort((a,b)=> collator(a.n,b.n));
 }
+// Ordre de consoles personnalisé par constructeur (remplace le tri chronologique par défaut)
+const CUSTOM_ORDER = {
+  'Nintendo': ['Game Boy','Game Boy Color','Game Boy Advance','Nintendo DS','Nintendo 3DS','NES','Super NES','Nintendo 64','Gamecube','Wii','WiiU','Switch','Switch 2'],
+  'Sony': ['PSP','PS VITA','Playstation','Playstation 2','Playstation 3','Playstation 4','Playstation 5'],
+};
+const ALPHA_ORDER_FAMILIES = ["Retro 80's"];
+
 function consoleOrder(list){
   const minYear = {}, famOf = {};
   list.forEach(g=>{
@@ -419,6 +480,14 @@ function consoleOrder(list){
   return Object.keys(minYear).sort((a,b)=>{
     const fa = CATS.indexOf(famOf[a]), fb = CATS.indexOf(famOf[b]);
     if(fa!==fb) return fa-fb;
+    const fam = famOf[a];
+    if(CUSTOM_ORDER[fam]){
+      const ia = CUSTOM_ORDER[fam].indexOf(a), ib = CUSTOM_ORDER[fam].indexOf(b);
+      const ra = ia===-1 ? 999 : ia, rb = ib===-1 ? 999 : ib;
+      if(ra!==rb) return ra-rb;
+      return collator(a,b);
+    }
+    if(ALPHA_ORDER_FAMILIES.includes(fam)) return collator(a,b);
     if(minYear[a]!==minYear[b]) return minYear[a]-minYear[b];
     return collator(a,b);
   }).map(p=>({platform:p, family:famOf[p]}));
@@ -445,21 +514,34 @@ function renderTicker(total){
     tickerEl.innerHTML = target.split('').map(d=>`<span class="digit">${d}</span>`).join('');
   }
 }
-function renderSortSelect(list){
-  const sel = document.getElementById('sortSelect');
-  let html = `<option value="all">Tout afficher</option>`;
+function renderNavMenu(list){
+  const nav = document.getElementById('navMenu');
+  let html = `<a href="#" class="nav-all ${state.mode==='all'?'active':''}" data-mode="all">Tout afficher</a>`;
   CATS.forEach(fam=>{
     const color = CAT_HEX[fam] || '#333';
     const famPlats = consoleOrder(list.filter(g=>g.cat===fam)).map(o=>o.platform);
-    html += `<optgroup label="${escapeHtml(fam)}">`;
-    html += `<option value="fam:${escapeAttr(fam)}" style="border-left:4px solid ${color};padding-left:8px;font-weight:700;">${escapeHtml(fam)} (tous)</option>`;
-    famPlats.forEach(p=>{
-      html += `<option value="plat:${escapeAttr(p)}" style="border-left:4px solid ${color};padding-left:20px;">${escapeHtml(p)}</option>`;
-    });
-    html += `</optgroup>`;
+    const famActive = (state.mode==='family' && state.value===fam) ? 'active' : '';
+    html += `<div class="nav-family">
+      <a href="#" class="nav-fam-link ${famActive}" data-mode="family" data-value="${escapeAttr(fam)}" style="border-left-color:${color};">${escapeHtml(fam)}</a>
+      <div class="nav-consoles">
+        ${famPlats.map(p=>{
+          const platActive = (state.mode==='platform' && state.value===p) ? 'active' : '';
+          return `<a href="#" class="nav-plat-link ${platActive}" data-mode="platform" data-value="${escapeAttr(p)}" style="border-left-color:${color};">${escapeHtml(p)}</a>`;
+        }).join('')}
+      </div>
+    </div>`;
   });
-  sel.innerHTML = html;
-  sel.value = state.mode==='all' ? 'all' : (state.mode==='family' ? 'fam:'+state.value : 'plat:'+state.value);
+  nav.innerHTML = html;
+  nav.querySelectorAll('a[data-mode]').forEach(a=>{
+    a.addEventListener('click', e=>{
+      e.preventDefault();
+      const mode = a.dataset.mode;
+      if(mode === 'all'){ state.mode = 'all'; state.value = null; }
+      else { state.mode = mode; state.value = a.dataset.value; }
+      closeSidebarMobile();
+      render();
+    });
+  });
 }
 function buildArtInner(g){
   if(g.img) return `<img src="${escapeAttr(g.img)}" alt="" loading="lazy" onerror="this.remove(); this.parentElement.insertAdjacentHTML('beforeend', '<span class=box-plat-tag>${escapeHtml(g.p)}</span>');">`;
@@ -495,7 +577,7 @@ function buildConsoleSection(platform, family, games){
 }
 function render(){
   renderTicker(allGames.length);
-  renderSortSelect(allGames);
+  renderNavMenu(allGames);
 
   let filtered = allGames;
   if(state.mode === 'family') filtered = filtered.filter(g=>g.cat===state.value);
@@ -763,19 +845,44 @@ document.addEventListener('keydown', e=>{
 });
 document.getElementById('addBtn').addEventListener('click', ()=>openCard(null, true));
 
+/* ---------- scroll to top ---------- */
+const scrollTopBtn = document.getElementById('scrollTopBtn');
+function updateScrollTopVisibility(){
+  if(window.scrollY > 400) scrollTopBtn.classList.add('show');
+  else scrollTopBtn.classList.remove('show');
+}
+window.addEventListener('scroll', updateScrollTopVisibility, {passive:true});
+scrollTopBtn.addEventListener('click', ()=>{
+  window.scrollTo({top:0, behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth'});
+});
+updateScrollTopVisibility();
+
 let searchTimer;
-document.getElementById('searchInput').addEventListener('input', e=>{
+const searchInputEl = document.getElementById('searchInput');
+const searchClearBtn = document.getElementById('searchClear');
+function updateSearchClearVisibility(){ searchClearBtn.hidden = !searchInputEl.value; }
+searchInputEl.addEventListener('input', e=>{
+  updateSearchClearVisibility();
   clearTimeout(searchTimer);
   const val = e.target.value;
   searchTimer = setTimeout(()=>{ state.q = val; render(); }, 140);
 });
-document.getElementById('sortSelect').addEventListener('change', e=>{
-  const v = e.target.value;
-  if(v === 'all'){ state.mode = 'all'; state.value = null; }
-  else if(v.startsWith('fam:')){ state.mode = 'family'; state.value = v.slice(4); }
-  else if(v.startsWith('plat:')){ state.mode = 'platform'; state.value = v.slice(5); }
+searchClearBtn.addEventListener('click', ()=>{
+  searchInputEl.value = '';
+  updateSearchClearVisibility();
+  state.q = '';
   render();
+  searchInputEl.focus();
 });
+
+/* ---------- mobile sidebar drawer ---------- */
+const sidebarEl = document.getElementById('sidebar');
+const sidebarBackdropEl = document.getElementById('sidebarBackdrop');
+function openSidebarMobile(){ sidebarEl.classList.add('open'); sidebarBackdropEl.hidden = false; }
+function closeSidebarMobile(){ sidebarEl.classList.remove('open'); sidebarBackdropEl.hidden = true; }
+document.getElementById('sidebarToggleBtn').addEventListener('click', openSidebarMobile);
+document.getElementById('sidebarClose').addEventListener('click', closeSidebarMobile);
+sidebarBackdropEl.addEventListener('click', closeSidebarMobile);
 
 let toastTimer;
 let toastUndoHandler = null;
