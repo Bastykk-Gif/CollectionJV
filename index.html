@@ -185,6 +185,8 @@ a{color:inherit;}
 .crop-actions button{font-family:'Inter',sans-serif; font-weight:600; font-size:.9rem; padding:11px 20px; border-radius:6px; border:1px solid var(--brass); background:transparent; color:var(--card); cursor:pointer;}
 .crop-actions button.primary{background:var(--brass); color:#1b140d;}
 .crop-actions button:disabled{opacity:.5; cursor:not-allowed;}
+.crop-magnifier{position:fixed; width:130px; height:130px; border-radius:50%; border:3px solid var(--brass-light); box-shadow:0 6px 20px rgba(0,0,0,.6); pointer-events:none; z-index:330; background:#000;}
+.crop-magnifier[hidden]{display:none;}
 
 .combo-select{display:block; width:100%;}
 .combo-new-input{width:100%; margin-top:6px;}
@@ -316,6 +318,7 @@ a{color:inherit;}
     <button type="button" id="cropCancelBtn">Annuler</button>
     <button type="button" id="cropConfirmBtn" class="primary">Valider</button>
   </div>
+  <canvas class="crop-magnifier" id="cropMagnifier" width="130" height="130" hidden></canvas>
 </div>
 
 <script>
@@ -524,6 +527,8 @@ function warpPerspective(sourceCanvas, srcQuad, outW, outH){
 const cropOverlayEl = document.getElementById('cropOverlay');
 const cropCanvasEl = document.getElementById('cropCanvas');
 const cropSvgEl = document.getElementById('cropSvg');
+const cropMagnifierEl = document.getElementById('cropMagnifier');
+const MAGNIFIER_ZOOM = 3;
 let cropWorkingCanvas = null;
 let cropPoints = null; // [[x,y] x4] dans l'espace pixel de cropWorkingCanvas, ordre TL,TR,BR,BL
 let cropOnConfirm = null;
@@ -551,6 +556,7 @@ function buildCropSvg(){
       e.preventDefault();
       cropDragIndex = i;
       c.setPointerCapture(e.pointerId);
+      updateMagnifier(i, e.clientX, e.clientY);
     });
     c.addEventListener('pointermove', e=>{
       if(cropDragIndex !== i) return;
@@ -559,9 +565,10 @@ function buildCropSvg(){
       const p = svgPointFromEvent(e);
       cropPoints[i] = [Math.min(Math.max(p.x,0),w), Math.min(Math.max(p.y,0),h)];
       updateCropSvg();
+      updateMagnifier(i, e.clientX, e.clientY);
     });
-    c.addEventListener('pointerup', ()=>{ cropDragIndex = -1; });
-    c.addEventListener('pointercancel', ()=>{ cropDragIndex = -1; });
+    c.addEventListener('pointerup', ()=>{ cropDragIndex = -1; cropMagnifierEl.hidden = true; });
+    c.addEventListener('pointercancel', ()=>{ cropDragIndex = -1; cropMagnifierEl.hidden = true; });
   });
 }
 // Ne fait que déplacer les points existants (pas de recréation DOM) pendant le glisser.
@@ -571,6 +578,35 @@ function updateCropSvg(){
     const p = cropPoints[Number(c.dataset.i)];
     c.setAttribute('cx', p[0]); c.setAttribute('cy', p[1]);
   });
+}
+// Loupe grossissante affichée près du doigt pendant le glisser d'un coin, pour viser
+// précisément malgré un doigt qui cache le point sur un petit écran.
+function updateMagnifier(i, clientX, clientY){
+  const w = cropWorkingCanvas.width, h = cropWorkingCanvas.height;
+  const [px, py] = cropPoints[i];
+  const size = cropMagnifierEl.width;
+  const half = size / (2 * MAGNIFIER_ZOOM);
+  const sx = Math.max(0, Math.min(px - half, w - half*2));
+  const sy = Math.max(0, Math.min(py - half, h - half*2));
+  const sw = Math.min(half*2, w), sh = Math.min(half*2, h);
+  const mctx = cropMagnifierEl.getContext('2d');
+  mctx.imageSmoothingEnabled = false;
+  mctx.clearRect(0, 0, size, size);
+  mctx.drawImage(cropWorkingCanvas, sx, sy, sw, sh, 0, 0, size, size);
+  const cx = (px - sx) * MAGNIFIER_ZOOM, cy = (py - sy) * MAGNIFIER_ZOOM;
+  mctx.strokeStyle = 'rgba(255,60,60,.9)'; mctx.lineWidth = 1.5;
+  mctx.beginPath();
+  mctx.moveTo(cx-11, cy); mctx.lineTo(cx+11, cy);
+  mctx.moveTo(cx, cy-11); mctx.lineTo(cx, cy+11);
+  mctx.stroke();
+
+  const gap = 26;
+  let top = clientY - size - gap;
+  if(top < 8) top = clientY + gap;
+  const left = Math.max(8, Math.min(clientX - size/2, window.innerWidth - size - 8));
+  cropMagnifierEl.style.top = top + 'px';
+  cropMagnifierEl.style.left = left + 'px';
+  cropMagnifierEl.hidden = false;
 }
 function openCropOverlay(file, onConfirm){
   loadWorkingCanvas(file).then(canvas=>{
