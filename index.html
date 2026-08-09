@@ -72,6 +72,7 @@ a{color:inherit;}
 .console-fam{font-family:'Inter',sans-serif; font-weight:600; font-size:.78rem; text-transform:uppercase; letter-spacing:.06em; color:var(--muted);}
 .console-count{margin-left:auto; font-family:'Inter',sans-serif; font-size:.82rem; color:var(--muted);}
 .console-grid{display:grid; grid-template-columns:repeat(auto-fill,minmax(132px,1fr)); gap:16px;}
+.console-grid.flat-grid{margin-top:24px;}
 
 .box-tile{position:relative; cursor:pointer; border-radius:8px; overflow:hidden; box-shadow:0 6px 14px rgba(0,0,0,.32); transition:transform .14s ease, box-shadow .14s ease; background:var(--panel);}
 .box-tile:hover{transform:translateY(-4px); box-shadow:0 14px 26px rgba(0,0,0,.48);}
@@ -250,7 +251,7 @@ const auth = firebase.auth();
 const gamesCol = db.collection('games');
 const metaDoc = db.collection('meta').doc('status');
 
-const CATS = ["Nintendo","Sony","Microsoft","Sega","PC","Retro 80's"];
+const CATS = ["Nintendo","Sony","Sega","Microsoft","PC","Retro 80's"];
 const CAT_VAR = {Nintendo:'--c-nintendo', Sony:'--c-sony', Microsoft:'--c-microsoft', Sega:'--c-sega', PC:'--c-pc', "Retro 80's":'--c-retro'};
 const CAT_HEX = {Nintendo:'#C24756', Sony:'#4A7196', Microsoft:'#4F9463', Sega:'#3D9AB6', PC:'#A6926E', "Retro 80's":'#D2A24F'};
 
@@ -286,7 +287,7 @@ const FIELD_DEFS = [
 ];
 
 let allGames = [];
-const state = { q:'', platform:'all' };
+const state = { q:'', mode:'all', value:null };
 
 function collator(a,b){ return (a||'').localeCompare(b||'', 'fr', {sensitivity:'base'}); }
 function distinctValues(key){
@@ -405,15 +406,6 @@ authForm.addEventListener('submit', async e=>{
 document.getElementById('logoutBtn').addEventListener('click', ()=>auth.signOut());
 
 /* ---------- filtering / sorting ---------- */
-function applyFilters(list){
-  let out = list;
-  if(state.platform!=='all') out = out.filter(g=>g.p===state.platform);
-  if(state.q.trim()){
-    const q = state.q.trim().toLowerCase();
-    out = out.filter(g => [g.n,g.pub,g.dev,g.f,g.g,g.p].join(' ').toLowerCase().includes(q));
-  }
-  return out;
-}
 function sortWithin(list){
   return list.slice().sort((a,b)=> collator(a.n,b.n));
 }
@@ -455,14 +447,19 @@ function renderTicker(total){
 }
 function renderSortSelect(list){
   const sel = document.getElementById('sortSelect');
-  const famOf = {};
-  list.forEach(g=>{ famOf[g.p] = g.cat; });
-  const plats = Array.from(new Set(list.map(g=>g.p))).sort(collator);
-  sel.innerHTML = `
-    <option value="all">Aller à une console</option>
-    ${plats.map(p=>`<option value="${escapeAttr(p)}" style="background-color:${CAT_HEX[famOf[p]]||'#333'};color:#fff;">${escapeHtml(p)}</option>`).join('')}
-  `;
-  sel.value = state.platform;
+  let html = `<option value="all">Tout afficher</option>`;
+  CATS.forEach(fam=>{
+    const color = CAT_HEX[fam] || '#333';
+    const famPlats = consoleOrder(list.filter(g=>g.cat===fam)).map(o=>o.platform);
+    html += `<optgroup label="${escapeHtml(fam)}">`;
+    html += `<option value="fam:${escapeAttr(fam)}" style="border-left:4px solid ${color};padding-left:8px;font-weight:700;">${escapeHtml(fam)} (tous)</option>`;
+    famPlats.forEach(p=>{
+      html += `<option value="plat:${escapeAttr(p)}" style="border-left:4px solid ${color};padding-left:20px;">${escapeHtml(p)}</option>`;
+    });
+    html += `</optgroup>`;
+  });
+  sel.innerHTML = html;
+  sel.value = state.mode==='all' ? 'all' : (state.mode==='family' ? 'fam:'+state.value : 'plat:'+state.value);
 }
 function buildArtInner(g){
   if(g.img) return `<img src="${escapeAttr(g.img)}" alt="" loading="lazy" onerror="this.remove(); this.parentElement.insertAdjacentHTML('beforeend', '<span class=box-plat-tag>${escapeHtml(g.p)}</span>');">`;
@@ -500,10 +497,14 @@ function render(){
   renderTicker(allGames.length);
   renderSortSelect(allGames);
 
-  const filtered = applyFilters(allGames);
+  let filtered = allGames;
+  if(state.mode === 'family') filtered = filtered.filter(g=>g.cat===state.value);
+  else if(state.mode === 'platform') filtered = filtered.filter(g=>g.p===state.value);
+  if(state.q.trim()){
+    const q = state.q.trim().toLowerCase();
+    filtered = filtered.filter(g => [g.n,g.pub,g.dev,g.f,g.g,g.p].join(' ').toLowerCase().includes(q));
+  }
   document.getElementById('resultCount').textContent = `${filtered.length} / ${allGames.length} fiches`;
-
-  const order = consoleOrder(filtered.length ? filtered : allGames);
 
   const shelf = document.getElementById('shelf');
   shelf.innerHTML = '';
@@ -517,6 +518,16 @@ function render(){
     document.getElementById('emptyAddBtn').addEventListener('click', ()=>openCard(null, true));
     return;
   }
+
+  if(state.mode === 'all'){
+    const grid = document.createElement('div');
+    grid.className = 'console-grid flat-grid';
+    sortWithin(filtered).forEach(g=>grid.appendChild(buildTile(g)));
+    shelf.appendChild(grid);
+    return;
+  }
+
+  const order = consoleOrder(filtered);
   const byPlatform = {};
   filtered.forEach(g=>{ (byPlatform[g.p] = byPlatform[g.p] || []).push(g); });
   order.forEach(o=>{
@@ -534,8 +545,15 @@ function findGame(id){ return allGames.find(g=>g.id===id); }
 
 function openCard(id, isNew=false){
   lastFocused = document.activeElement;
-  const defaultCat = (state.platform!=='all' && allGames.find(x=>x.p===state.platform)) ? allGames.find(x=>x.p===state.platform).cat : 'Nintendo';
-  const g = isNew ? {id:null, n:'', p: state.platform!=='all'?state.platform:'', cat: defaultCat, y:'', g:'', pub:'', dev:'', f:'', ed:'', r:'', img:''} : findGame(id);
+  let defaultP = '', defaultCat = 'Nintendo';
+  if(state.mode === 'platform'){
+    defaultP = state.value;
+    const match = allGames.find(x=>x.p===state.value);
+    if(match) defaultCat = match.cat;
+  } else if(state.mode === 'family'){
+    defaultCat = state.value;
+  }
+  const g = isNew ? {id:null, n:'', p:defaultP, cat:defaultCat, y:'', g:'', pub:'', dev:'', f:'', ed:'', r:'', img:''} : findGame(id);
   if(!g) return;
   renderCard(g, isNew || !g.id);
   overlay.hidden = false;
@@ -544,16 +562,19 @@ function openCard(id, isNew=false){
 }
 
 function buildComboField(key, label, currentValue, options, required){
-  const isCustom = !currentValue || !options.includes(currentValue);
-  const opts = options.map(o=>`<option value="${escapeAttr(o)}" ${(!isCustom && o===currentValue)?'selected':''}>${escapeHtml(o)}</option>`).join('');
+  const inOptions = !!currentValue && options.includes(currentValue);
+  const isLegacyCustom = !!currentValue && !inOptions; // has a saved value that isn't in the known list
+  const placeholderHtml = currentValue ? '' : `<option value="" disabled selected>— Choisir —</option>`;
+  const opts = options.map(o=>`<option value="${escapeAttr(o)}" ${inOptions && o===currentValue?'selected':''}>${escapeHtml(o)}</option>`).join('');
   return `<div class="field ${required?'required':''}">
     <dt>${label}</dt>
     <dd>
       <select id="f_${key}_sel" class="combo-select" data-key="${key}">
+        ${placeholderHtml}
         ${opts}
-        <option value="__new__" ${isCustom?'selected':''}>+ Nouveau…</option>
+        <option value="__new__" ${isLegacyCustom?'selected':''}>+ Nouveau…</option>
       </select>
-      <input type="text" id="f_${key}" class="combo-new-input" placeholder="Nouvelle valeur — ${label}" value="${isCustom?escapeAttr(currentValue):''}" ${isCustom?'':'hidden'}>
+      <input type="text" id="f_${key}" class="combo-new-input" placeholder="Nouvelle valeur — ${label}" value="${isLegacyCustom?escapeAttr(currentValue):''}" ${isLegacyCustom?'':'hidden'}>
     </dd>
   </div>`;
 }
@@ -749,7 +770,10 @@ document.getElementById('searchInput').addEventListener('input', e=>{
   searchTimer = setTimeout(()=>{ state.q = val; render(); }, 140);
 });
 document.getElementById('sortSelect').addEventListener('change', e=>{
-  state.platform = e.target.value;
+  const v = e.target.value;
+  if(v === 'all'){ state.mode = 'all'; state.value = null; }
+  else if(v.startsWith('fam:')){ state.mode = 'family'; state.value = v.slice(4); }
+  else if(v.startsWith('plat:')){ state.mode = 'platform'; state.value = v.slice(5); }
   render();
 });
 
