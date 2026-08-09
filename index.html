@@ -201,21 +201,25 @@ const CATS = ["Nintendo","Sony","Microsoft","Sega","PC","Retro 80's"];
 const CAT_VAR = {Nintendo:'--c-nintendo', Sony:'--c-sony', Microsoft:'--c-microsoft', Sega:'--c-sega', PC:'--c-pc', "Retro 80's":'--c-retro'};
 const CAT_HEX = {Nintendo:'#C24756', Sony:'#4A7196', Microsoft:'#4F9463', Sega:'#3D9AB6', PC:'#A6926E', "Retro 80's":'#D2A24F'};
 
-// Ratios largeur/hauteur approximatifs par type de boîtier, pour ne pas déformer les photos importées
+// Ratios largeur/hauteur exacts par support (dimensions boîte mesurées), format "largeur/hauteur"
+// prêt à l'emploi pour la propriété CSS aspect-ratio, afin qu'une photo importée ne soit jamais déformée.
 const PLATFORM_RATIO = {
-  'NES':0.68, 'Game Boy':0.72, 'Super NES':0.71, 'Nintendo 64':0.71, 'Game Boy Color':0.72,
-  'Game Boy Advance':0.68, 'Gamecube':0.71, 'Nintendo DS':0.68, 'Wii':0.71, 'Switch':0.68,
-  'Nintendo 3DS':0.68, 'WiiU':0.71, 'Switch 2':0.68,
-  'Playstation':0.79, 'Playstation 2':0.71, 'PSP':0.68, 'Playstation 3':0.71, 'PS VITA':0.68,
-  'Playstation 4':0.71, 'Playstation 5':0.71,
-  'Xbox':0.71, 'Xbox 360':0.71, 'Xbox One':0.71,
-  'Game Gear':0.72, 'Megadrive':0.71, 'Saturn':0.79, 'Dreamcast':0.79,
-  'PC':0.71,
-  'Atari 2600':0.75, 'Intellivision':0.75, 'Amstrad':0.75, 'MSX':0.75, 'ZX Spectrum':0.75,
-  'Atari 400/800/XL/XE':0.75, 'Colecovision':0.75, 'Commodore 64':0.75, 'Rollet':0.75,
+  'Amstrad':'70/110', 'Atari 2600':'140/190', 'Atari 400/800/XL/XE':'155/230',
+  'Colecovision':'140/190', 'Commodore 64':'70/110', 'Dreamcast':'124/143',
+  'Game Boy':'123/123', 'Game Boy Advance':'123/123', 'Game Boy Color':'123/123',
+  'Game Gear':'100/130', 'Gamecube':'135/190', 'Intellivision':'140/191',
+  'Megadrive':'130/180', 'MSX':'110/150', 'NES':'125/180',
+  'Nintendo 3DS':'123/136', 'Nintendo 64':'180/130', 'Nintendo DS':'123/136',
+  'PC':'135/190', 'Playstation':'130/142', 'Playstation 2':'135/190',
+  'Playstation 3':'135/170', 'Playstation 4':'135/170', 'Playstation 5':'135/170',
+  'PS VITA':'65/105', 'PSP':'110/180', 'Rollet':'140/210', 'Saturn':'140/195',
+  'Super NES':'180/126', 'Switch':'104/169', 'Switch 2':'104/169',
+  'Wii':'135/190', 'WiiU':'135/190', 'Xbox':'135/190', 'Xbox 360':'135/191',
+  'Xbox One':'135/170', 'ZX Spectrum':'70/110',
 };
-const DEFAULT_RATIO = 0.72;
+const DEFAULT_RATIO = '135/190';
 function ratioFor(p){ return PLATFORM_RATIO[p] || DEFAULT_RATIO; }
+function ratioNum(str){ const [w,h] = String(str).split('/').map(Number); return (w && h) ? w/h : 0.71; }
 
 const FIELD_DEFS = [
   {key:'p', label:'Plateforme', required:true},
@@ -485,10 +489,11 @@ function renderCard(g, editMode){
 
   const previewInner = g.img ? `<img src="${escapeAttr(g.img)}" alt="" onerror="this.style.display='none';">` : `<span class="box-plat-tag">${escapeHtml(g.p||g.cat||'')}</span>`;
   const previewRatio = g.p ? ratioFor(g.p) : DEFAULT_RATIO;
+  const previewNum = ratioNum(previewRatio);
 
   cardEl.innerHTML = `
     <div class="card-stamp">N° ${idNum}</div>
-    <div class="card-preview" id="cardPreview" style="aspect-ratio:${previewRatio};max-width:${Math.round(previewRatio*260)}px;margin-left:auto;margin-right:auto;">${previewInner}</div>
+    <div class="card-preview" id="cardPreview" style="aspect-ratio:${previewRatio};max-width:${Math.round(previewNum*260)}px;margin-left:auto;margin-right:auto;">${previewInner}</div>
     <h2 class="card-title" id="cardTitle">${editMode ? '' : escapeHtml(g.n)}</h2>
     <div class="card-sub">${escapeHtml(g.cat)}${isNewEntry ? ' · Nouvelle fiche' : (g.id && g.id.startsWith('u') ? ' · Ajout personnel' : '')}</div>
     <dl class="fields">${fieldsHtml}</dl>
