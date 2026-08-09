@@ -245,9 +245,8 @@ a{color:inherit;}
   <div class="main-column">
     <header class="hero">
       <div class="hero-inner">
-        <p class="eyebrow">CLASSÉ PAR CONSOLE · 1977 → AUJOURD'HUI</p>
         <h1 class="hero-title">COLLECTION DE JV</h1>
-        <p class="hero-sub">Le catalogue de la collection vidéoludique</p>
+        <p class="hero-sub">Le catalogue de la collection vidéoludique d'Olivier</p>
         <div class="ticker">
           <div class="ticker-num" id="tickerCount"></div>
           <div class="ticker-label">jeux<br>répertoriés</div>
@@ -381,7 +380,7 @@ function setStatus(kind, text){
   const line = document.getElementById('statusLine');
   const txt = document.getElementById('statusText');
   line.className = 'status-line ' + kind;
-  const labels = { connecting:'Connexion au fichier…', ok:'Synchronisé avec Firebase', error: text || 'Connexion impossible' };
+  const labels = { connecting:'Connexion au fichier…', ok:'', error: text || 'Connexion impossible' };
   txt.textContent = labels[kind] || text || '';
   document.getElementById('addBtn').disabled = (kind !== 'ok');
 }
