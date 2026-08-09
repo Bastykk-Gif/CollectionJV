@@ -1,0 +1,12 @@
+{
+  "name": "collectionjv-cover-tool",
+  "private": true,
+  "type": "module",
+  "version": "1.0.0",
+  "scripts": {
+    "review": "node scripts/server.mjs"
+  },
+  "dependencies": {
+    "firebase-admin": "^12.7.0"
+  }
+}

@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>Revue des jaquettes — Collection JV</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  :root{ --bg:#161210; --panel:#221c18; --card:#efe6d8; --muted:#a89a86; --brass:#b08d57; --ok:#5a9c6c; --bad:#c24756; }
+  *{box-sizing:border-box;}
+  body{margin:0; background:var(--bg); color:var(--card); font-family:'Segoe UI',Inter,sans-serif;}
+  header{padding:14px 22px; border-bottom:1px solid rgba(176,141,87,.25); display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px;}
+  header h1{font-size:1.05rem; margin:0;}
+  #stats{font-size:.85rem; color:var(--muted);}
+  main{max-width:1000px; margin:0 auto; padding:22px;}
+  #doneMsg{display:none; text-align:center; padding:60px 20px; font-size:1.2rem;}
+  .game-card{background:var(--panel); border:1px solid rgba(176,141,87,.25); border-radius:8px; padding:18px 20px; margin-bottom:18px;}
+  .game-card h2{margin:0 0 6px; font-size:1.4rem;}
+  .meta{display:flex; flex-wrap:wrap; gap:8px 18px; font-size:.85rem; color:var(--muted); margin-bottom:4px;}
+  .meta b{color:var(--card); font-weight:600;}
+  .search-row{display:flex; gap:8px; margin:14px 0 4px;}
+  .search-row input{flex:1; background:var(--bg); border:1px solid rgba(176,141,87,.35); color:var(--card); padding:8px 10px; border-radius:5px; font-size:.9rem;}
+  .search-row button, .url-row button{background:var(--brass); border:none; color:#1b140d; font-weight:600; padding:8px 14px; border-radius:5px; cursor:pointer; white-space:nowrap;}
+  .url-row{display:flex; gap:8px; margin:8px 0 0;}
+  .url-row input{flex:1; background:var(--bg); border:1px solid rgba(176,141,87,.35); color:var(--card); padding:8px 10px; border-radius:5px; font-size:.9rem;}
+  .candidates{display:grid; grid-template-columns:repeat(auto-fill,minmax(140px,1fr)); gap:12px; margin:16px 0;}
+  .cand{border:2px solid transparent; border-radius:6px; overflow:hidden; cursor:pointer; background:var(--bg); position:relative;}
+  .cand img{width:100%; height:170px; object-fit:contain; background:#000; display:block;}
+  .cand .info{padding:5px 7px; font-size:.72rem; color:var(--muted); line-height:1.35;}
+  .cand.selected{border-color:var(--ok);}
+  .cand .badge{position:absolute; top:5px; right:5px; font-size:.65rem; padding:2px 6px; border-radius:3px; font-weight:700;}
+  .badge.match{background:var(--ok); color:#0e1a11;}
+  .badge.mismatch{background:var(--bad); color:#fff;}
+  .empty-cands{color:var(--muted); font-size:.88rem; padding:10px 0;}
+  .actions{display:flex; gap:10px; flex-wrap:wrap; margin-top:16px;}
+  .actions button{padding:10px 16px; border-radius:6px; font-weight:600; cursor:pointer; font-size:.88rem; border:1px solid var(--brass); background:transparent; color:var(--card);}
+  .actions button.primary{background:var(--brass); color:#1b140d; border-color:var(--brass);}
+  .actions button.danger{border-color:var(--bad); color:var(--bad);}
+  .actions button:disabled{opacity:.4; cursor:not-allowed;}
+  .msg{font-size:.85rem; margin-top:8px; min-height:1.2em;}
+  .msg.error{color:var(--bad);}
+  .msg.ok{color:var(--ok);}
+  .hint{font-size:.78rem; color:var(--muted); margin-top:18px;}
+</style>
+</head>
+<body>
+<header>
+  <h1>Revue des jaquettes — Collection JV</h1>
+  <div id="stats">Chargement…</div>
+</header>
+<main>
+  <div id="doneMsg">Tous les jeux ont une jaquette ou ont été passés. 🎉</div>
+  <div id="gameCard" class="game-card" style="display:none;">
+    <h2 id="gTitle"></h2>
+    <div class="meta">
+      <span><b id="gPlatform"></b></span>
+      <span>Année : <b id="gYear"></b></span>
+      <span>Région : <b id="gRegion"></b></span>
+      <span>Franchise : <b id="gFranchise"></b></span>
+      <span>Éditeur : <b id="gPub"></b></span>
+    </div>
+
+    <div class="search-row">
+      <input type="text" id="searchInput" placeholder="Relancer la recherche avec un autre titre…">
+      <button id="searchBtn" type="button">Rechercher</button>
+    </div>
+    <div class="url-row">
+      <input type="text" id="urlInput" placeholder="…ou coller directement l'URL d'une image trouvée ailleurs">
+      <button id="urlPreviewBtn" type="button">Ajouter</button>
+    </div>
+
+    <div class="candidates" id="candidates"></div>
+
+    <div class="actions">
+      <button class="primary" id="acceptBtn" type="button" disabled>Intégrer l'image sélectionnée (Entrée)</button>
+      <button id="acceptUrlBtn" type="button" disabled>Garder juste l'URL externe (U)</button>
+      <button class="danger" id="skipBtn" type="button">Passer ce jeu (S)</button>
+    </div>
+    <div class="msg" id="msg"></div>
+    <div class="hint">Raccourcis : chiffres 1-9 = sélectionner une jaquette, Entrée = intégrer, U = garder l'URL, S = passer.</div>
+  </div>
+</main>
+<script src="review.js"></script>
+</body>
+</html>
