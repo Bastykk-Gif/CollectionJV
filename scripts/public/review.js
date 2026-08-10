@@ -72,8 +72,9 @@ function renderCandidates(){
 
 function updateActionButtons(){
   const has = selectedIndex >= 0;
+  const isLocal = has && !!currentCandidates[selectedIndex].local;
   el('acceptBtn').disabled = !has;
-  el('acceptUrlBtn').disabled = !has;
+  el('acceptUrlBtn').disabled = !has || isLocal;
 }
 
 function escapeHtml(s){ return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
@@ -173,6 +174,49 @@ function addUrlCandidate(){
   renderCandidates();
   updateActionButtons();
 }
+
+/* ---------- glisser-déposer une image (depuis le disque ou une page web) ---------- */
+function extractDroppedUrl(dt){
+  const uriList = dt.getData('text/uri-list');
+  if(uriList){
+    const line = uriList.split('\n').find(l => l && !l.startsWith('#'));
+    if(line) return line.trim();
+  }
+  const html = dt.getData('text/html');
+  if(html){
+    const m = html.match(/<img[^>]+src=["']([^"']+)["']/i);
+    if(m) return m[1];
+  }
+  const text = dt.getData('text/plain');
+  if(text && /^(https?|data):/i.test(text.trim())) return text.trim();
+  return null;
+}
+function addFileCandidate(file){
+  const url = URL.createObjectURL(file);
+  currentCandidates = [{ url, gameTitle: 'Fichier déposé', releaseDate: '', platformName: '', platformMatch: null, local: true }, ...currentCandidates];
+  selectedIndex = 0;
+  renderCandidates();
+  updateActionButtons();
+}
+const gameCardEl = el('gameCard');
+gameCardEl.addEventListener('dragover', e => { e.preventDefault(); gameCardEl.classList.add('drag-over'); });
+gameCardEl.addEventListener('dragleave', () => gameCardEl.classList.remove('drag-over'));
+gameCardEl.addEventListener('drop', e => {
+  e.preventDefault();
+  gameCardEl.classList.remove('drag-over');
+  const dt = e.dataTransfer;
+  if(dt.files && dt.files.length && dt.files[0].type.startsWith('image/')){
+    addFileCandidate(dt.files[0]);
+    return;
+  }
+  const url = extractDroppedUrl(dt);
+  if(url){
+    el('urlInput').value = url;
+    addUrlCandidate();
+  }else{
+    setMsg("Aucune image détectée dans l'élément déposé.", 'error');
+  }
+});
 
 el('acceptBtn').addEventListener('click', accept);
 el('acceptUrlBtn').addEventListener('click', acceptUrl);

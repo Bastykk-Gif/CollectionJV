@@ -85,10 +85,13 @@ async function getCandidates(title, ourPlatform){
   }
   return sortForPlatform(candidates, ourPlatform);
 }
+// Exclut les jaquettes d'une autre plateforme confirmée (platformMatch === false).
+// Les plateformes inconnues de la table d'alias (null) restent, faute de mieux.
 function sortForPlatform(list, ourPlatform){
   const scored = list.map(c => ({ ...c, platformMatch: ourPlatform ? platformMatches(ourPlatform, c.platformName) : c.platformMatch }));
-  const score = c => c.platformMatch === true ? 0 : c.platformMatch === null ? 1 : 2;
-  return scored.sort((a, b) => score(a) - score(b));
+  const filtered = scored.filter(c => c.platformMatch !== false);
+  const score = c => c.platformMatch === true ? 0 : 1;
+  return filtered.sort((a, b) => score(a) - score(b));
 }
 
 const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8' };
@@ -147,8 +150,8 @@ const server = http.createServer(async (req, res) => {
       const { id, query } = await readJsonBody(req);
       const g = games.find(x => x.id === id);
       if(!g) return sendJson(res, 404, { error: 'Jeu inconnu' });
-      const candidates = await searchCovers(TGDB_API_KEY, query, g.p, platformIdToName);
-      return sendJson(res, 200, { candidates });
+      const raw = await searchCovers(TGDB_API_KEY, query, g.p, platformIdToName);
+      return sendJson(res, 200, { candidates: sortForPlatform(raw, g.p) });
     }
 
     if(req.method === 'POST' && url.pathname === '/api/save'){

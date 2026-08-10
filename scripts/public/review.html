@@ -13,7 +13,8 @@
   #stats{font-size:.85rem; color:var(--muted);}
   main{max-width:1000px; margin:0 auto; padding:22px;}
   #doneMsg{display:none; text-align:center; padding:60px 20px; font-size:1.2rem;}
-  .game-card{background:var(--panel); border:1px solid rgba(176,141,87,.25); border-radius:8px; padding:18px 20px; margin-bottom:18px;}
+  .game-card{background:var(--panel); border:2px dashed transparent; border-radius:8px; padding:18px 20px; margin-bottom:18px; outline:1px solid rgba(176,141,87,.25); outline-offset:-2px;}
+  .game-card.drag-over{border-color:var(--brass);}
   .game-card h2{margin:0 0 6px; font-size:1.4rem;}
   .meta{display:flex; flex-wrap:wrap; gap:8px 18px; font-size:.85rem; color:var(--muted); margin-bottom:4px;}
   .meta b{color:var(--card); font-weight:600;}
@@ -76,7 +77,7 @@
       <button class="danger" id="skipBtn" type="button">Passer ce jeu (S)</button>
     </div>
     <div class="msg" id="msg"></div>
-    <div class="hint">Raccourcis : chiffres 1-9 = sélectionner une jaquette, Entrée = intégrer, U = garder l'URL, S = passer.</div>
+    <div class="hint">Raccourcis : chiffres 1-9 = sélectionner une jaquette, Entrée = intégrer, U = garder l'URL, S = passer.<br>Vous pouvez aussi glisser-déposer une image (depuis le disque ou une page web) n'importe où sur cette carte.</div>
   </div>
 </main>
 <script src="review.js"></script>
