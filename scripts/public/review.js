@@ -114,15 +114,21 @@ function compressImageFromUrl(url, maxDim=640, quality=0.72){
 
 async function accept(){
   if(selectedIndex < 0) return;
-  const url = currentCandidates[selectedIndex].url;
+  const cand = currentCandidates[selectedIndex];
   setMsg('Compression en cours…');
   try{
-    const dataUrl = await compressImageFromUrl(url);
+    const dataUrl = await compressImageFromUrl(cand.url);
     await api('POST', '/api/save', { id: currentGame.id, img: dataUrl });
     await loadNext();
   }catch(err){
-    if(err.tainted){
-      setMsg("Cette image ne peut pas être téléchargée depuis le navigateur (restriction du site source). Utilisez plutôt « Garder juste l'URL externe ».", 'error');
+    if(err.tainted && !cand.local){
+      // Le site source bloque la lecture par canvas (CORS) : on garde simplement l'URL externe.
+      try{
+        await api('POST', '/api/save', { id: currentGame.id, img: cand.url });
+        await loadNext();
+      }catch(err2){
+        setMsg(err2.message, 'error');
+      }
     }else{
       setMsg(err.message, 'error');
     }
@@ -131,9 +137,10 @@ async function accept(){
 
 async function acceptUrl(){
   if(selectedIndex < 0) return;
-  const url = currentCandidates[selectedIndex].url;
+  const cand = currentCandidates[selectedIndex];
+  if(cand.local) return; // une URL de fichier local (blob:) ne survivrait pas au rechargement de la page
   try{
-    await api('POST', '/api/save', { id: currentGame.id, img: url });
+    await api('POST', '/api/save', { id: currentGame.id, img: cand.url });
     await loadNext();
   }catch(err){
     setMsg(err.message, 'error');
