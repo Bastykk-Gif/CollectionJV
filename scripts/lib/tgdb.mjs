@@ -21,8 +21,8 @@ export async function searchCovers(apiKey, title, ourPlatform, platformIdToName)
   if(!res.ok) throw new Error(`TheGamesDB /Games/ByGameName a échoué (${res.status})`);
   const json = await res.json();
   const games = json?.data?.games || [];
-  const imagesByGameId = json?.data?.images || {};
-  const baseUrl = json?.data?.base_url?.original || json?.data?.base_url?.large || json?.data?.base_url?.medium || '';
+  const imagesByGameId = json?.include?.boxart?.data || {};
+  const baseUrl = json?.include?.boxart?.base_url?.original || json?.include?.boxart?.base_url?.large || json?.include?.boxart?.base_url?.medium || '';
 
   const candidates = [];
   for(const g of games){
