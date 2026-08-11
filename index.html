@@ -10,6 +10,7 @@
 <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
+<script src="https://unpkg.com/@zxing/library@0.21.3/umd/index.min.js"></script>
 <style>
 :root{
   --bg:#141110; --bg-soft:#1B1715; --panel:#211C19;
@@ -137,6 +138,22 @@ a{color:inherit;}
 .fab:hover{transform:translateY(-2px);}
 .fab:focus-visible{outline:3px solid var(--card);}
 .fab:disabled{opacity:.4; cursor:not-allowed;}
+
+.fab-scan{position:fixed; right:86px; bottom:20px; width:50px; height:50px; border-radius:50%; background:var(--panel); border:1px solid rgba(176,141,87,.4); color:var(--card); font-size:1.35rem; cursor:pointer; z-index:50; display:flex; align-items:center; justify-content:center; box-shadow:0 10px 24px rgba(0,0,0,.5); line-height:1;}
+.is-readonly .fab-scan{display:none;}
+.fab-scan:hover{border-color:var(--brass-light);}
+.fab-scan:focus-visible{outline:3px solid var(--brass-light);}
+.fab-scan:disabled{opacity:.4; cursor:not-allowed;}
+
+.scan-overlay{position:fixed; inset:0; background:rgba(6,5,4,.94); z-index:340; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:16px; gap:14px;}
+.scan-overlay[hidden]{display:none;}
+.scan-box{position:relative; width:min(92vw,420px); aspect-ratio:4/3; border-radius:8px; overflow:hidden; background:#000;}
+.scan-box video{width:100%; height:100%; object-fit:cover;}
+.scan-guide{position:absolute; inset:20% 8%; border:3px solid var(--brass-light); border-radius:6px; box-shadow:0 0 0 2000px rgba(0,0,0,.4); pointer-events:none;}
+.scan-hint{color:var(--muted); font-family:'Inter',sans-serif; font-size:.85rem; text-align:center; max-width:420px;}
+.scan-msg{color:var(--stamp); font-family:'Inter',sans-serif; font-size:.85rem; text-align:center; max-width:420px; min-height:1.2em;}
+.scan-actions{display:flex; gap:10px;}
+.scan-actions button{font-family:'Inter',sans-serif; font-weight:600; font-size:.9rem; padding:11px 20px; border-radius:6px; border:1px solid var(--brass); background:transparent; color:var(--card); cursor:pointer;}
 
 .scroll-top-btn{position:fixed; right:24px; bottom:88px; width:46px; height:46px; border-radius:50%; background:var(--panel); border:1px solid rgba(176,141,87,.4); color:var(--card); font-size:1.25rem; cursor:pointer; z-index:49; display:flex; align-items:center; justify-content:center; box-shadow:0 8px 20px rgba(0,0,0,.4); opacity:0; pointer-events:none; transform:translateY(8px); transition:opacity .2s ease, transform .2s ease;}
 .scroll-top-btn.show{opacity:1; pointer-events:auto; transform:translateY(0);}
@@ -326,6 +343,7 @@ a{color:inherit;}
 </div>
 
 <button id="addBtn" class="fab" aria-label="Ajouter un jeu au fichier" disabled>+</button>
+<button id="scanBtn" class="fab-scan" type="button" aria-label="Ajouter un jeu en scannant son code-barres" title="Scanner un code-barres" disabled>📷</button>
 <button id="scrollTopBtn" class="scroll-top-btn" type="button" aria-label="Remonter en haut de page" title="Remonter en haut de page">↑</button>
 <div class="toast" id="toast"><span id="toastMsg"></span><button id="toastUndo" class="toast-undo" type="button">Annuler</button></div>
 
@@ -335,6 +353,13 @@ a{color:inherit;}
 
 <div class="lightbox-overlay" id="lightboxOverlay" hidden>
   <img id="lightboxImg" src="" alt="">
+</div>
+
+<div class="scan-overlay" id="scanOverlay" hidden>
+  <div class="scan-box"><video id="scanVideo" playsinline muted></video><div class="scan-guide"></div></div>
+  <p class="scan-hint">Vise le code-barres au dos de la boîte du jeu.</p>
+  <p class="scan-msg" id="scanMsg"></p>
+  <div class="scan-actions"><button type="button" id="scanCancelBtn">Annuler</button></div>
 </div>
 
 <div class="crop-overlay" id="cropOverlay" hidden>
@@ -524,6 +549,69 @@ async function tgdbSearchCovers(title, ourPlatform){
     return score(a) - score(b);
   });
   return filtered;
+}
+
+/* ---------- code-barres : devine un titre depuis un scan (UPCitemdb, best-effort) ---------- */
+const UPC_PROXY_BASE = 'https://collectionjv-tgdb-proxy.bastykk-collectionjv.workers.dev/upc';
+
+function cleanUpcTitle(raw){
+  return String(raw || '').replace(/\[[^\]]*\]/g, ' ').replace(/\s{2,}/g, ' ').trim();
+}
+async function upcLookupTitle(code){
+  const res = await fetch(`${UPC_PROXY_BASE}?code=${encodeURIComponent(code)}`);
+  if(!res.ok) throw new Error(`Recherche code-barres échouée (${res.status})`);
+  const json = await res.json();
+  const item = json?.items?.[0];
+  return item && item.title ? cleanUpcTitle(item.title) : '';
+}
+
+let barcodeReader = null;
+async function openBarcodeScanner(){
+  const overlay = document.getElementById('scanOverlay');
+  const msgEl = document.getElementById('scanMsg');
+  const video = document.getElementById('scanVideo');
+  msgEl.textContent = '';
+  overlay.hidden = false;
+  try{
+    const hints = new Map();
+    hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS, [
+      ZXing.BarcodeFormat.EAN_13, ZXing.BarcodeFormat.EAN_8,
+      ZXing.BarcodeFormat.UPC_A, ZXing.BarcodeFormat.UPC_E, ZXing.BarcodeFormat.CODE_128,
+    ]);
+    barcodeReader = new ZXing.BrowserMultiFormatReader(hints);
+    await barcodeReader.decodeFromConstraints({ video: { facingMode: 'environment' } }, video, (result)=>{
+      if(result){
+        const code = result.getText();
+        closeBarcodeScanner();
+        handleScannedBarcode(code);
+      }
+    });
+  }catch(err){
+    console.error(err);
+    msgEl.textContent = "Caméra inaccessible : " + (err.message || 'vérifie les autorisations du navigateur.');
+  }
+}
+function closeBarcodeScanner(){
+  document.getElementById('scanOverlay').hidden = true;
+  if(barcodeReader){ barcodeReader.reset(); barcodeReader = null; }
+}
+async function handleScannedBarcode(code){
+  const titleInput = document.getElementById('f_n');
+  if(!titleInput) return; // la fiche a été fermée entre-temps
+  showToast('Code-barres scanné : ' + code);
+  try{
+    const guess = await upcLookupTitle(code);
+    if(guess){
+      titleInput.value = guess;
+      const btn = document.getElementById('tgdbSearchBtn');
+      if(btn) btn.click();
+    } else {
+      showToast('Titre introuvable pour ce code-barres — saisis-le manuellement.');
+    }
+  }catch(err){
+    console.error(err);
+    showToast('Recherche du code-barres échouée — saisis le titre manuellement.');
+  }
 }
 
 let allGames = [];
@@ -829,6 +917,7 @@ function setStatus(kind, text){
   const labels = { connecting:'Connexion au fichier…', ok:'', error: text || 'Connexion impossible' };
   txt.textContent = labels[kind] || text || '';
   document.getElementById('addBtn').disabled = (kind !== 'ok');
+  document.getElementById('scanBtn').disabled = (kind !== 'ok');
 }
 
 /* ---------- seed + subscribe ---------- */
@@ -1430,6 +1519,11 @@ document.addEventListener('keydown', e=>{
   if(!overlay.hidden) closeCard();
 });
 document.getElementById('addBtn').addEventListener('click', ()=>openCard(null, true));
+document.getElementById('scanBtn').addEventListener('click', ()=>{
+  openCard(null, true);
+  openBarcodeScanner();
+});
+document.getElementById('scanCancelBtn').addEventListener('click', closeBarcodeScanner);
 
 /* ---------- scroll to top ---------- */
 const scrollTopBtn = document.getElementById('scrollTopBtn');
