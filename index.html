@@ -405,8 +405,9 @@ const FIELD_DEFS = [
 ];
 
 /* ---------- TheGamesDB : jaquette + infos automatiques depuis le titre ---------- */
-const TGDB_API_BASE = 'https://api.thegamesdb.net/v1';
-const TGDB_API_KEY = '560accacd1ec61db2647e19ca3cc00cf07bf9ce569b626cbb5dfb5a9606844bd';
+// TheGamesDB ne renvoie pas d'en-têtes CORS : les appels passent par un petit proxy
+// Cloudflare Worker (cf-worker/) qui garde la clé API secrète côté serveur.
+const TGDB_API_BASE = 'https://collectionjv-tgdb-proxy.bastykk-collectionjv.workers.dev/tgdb';
 
 // Correspondance entre nos noms de plateforme et les noms utilisés par TheGamesDB,
 // pour filtrer/mettre en avant les bons résultats. Filtre "souple" : une plateforme
@@ -463,7 +464,7 @@ async function tgdbFetchIdNameMap(endpoint, dataKey, cacheKey){
     const cached = localStorage.getItem(cacheKey);
     if(cached) return JSON.parse(cached);
   }catch{}
-  const res = await fetch(`${TGDB_API_BASE}/${endpoint}?apikey=${encodeURIComponent(TGDB_API_KEY)}`);
+  const res = await fetch(`${TGDB_API_BASE}/${endpoint}`);
   if(!res.ok) throw new Error(`TheGamesDB /${endpoint} a échoué (${res.status})`);
   const json = await res.json();
   const map = {};
@@ -487,7 +488,7 @@ async function tgdbEnsureLookups(){
 // et met en avant celles dont la plateforme correspond.
 async function tgdbSearchCovers(title, ourPlatform){
   await tgdbEnsureLookups();
-  const url = `${TGDB_API_BASE}/Games/ByGameName?apikey=${encodeURIComponent(TGDB_API_KEY)}&name=${encodeURIComponent(title)}&include=boxart,platform&fields=platform,release_date,genres,publishers,developers`;
+  const url = `${TGDB_API_BASE}/Games/ByGameName?name=${encodeURIComponent(title)}&include=boxart,platform&fields=platform,release_date,genres,publishers,developers`;
   const res = await fetch(url);
   if(!res.ok) throw new Error(`Recherche TheGamesDB échouée (${res.status})`);
   const json = await res.json();
