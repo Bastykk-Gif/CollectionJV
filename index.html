@@ -555,7 +555,9 @@ async function tgdbSearchCovers(title, ourPlatform){
 const UPC_PROXY_BASE = 'https://collectionjv-tgdb-proxy.bastykk-collectionjv.workers.dev/upc';
 
 function cleanUpcTitle(raw){
-  return String(raw || '').replace(/\[[^\]]*\]/g, ' ').replace(/\s{2,}/g, ' ').trim();
+  // Les fiches produit UPC mettent souvent la plateforme/édition entre [] ou () —
+  // du bruit pour la recherche TheGamesDB, à retirer avant de préremplir le titre.
+  return String(raw || '').replace(/[\[(][^\])]*[\])]/g, ' ').replace(/\s{2,}/g, ' ').trim();
 }
 async function upcLookupTitle(code){
   const res = await fetch(`${UPC_PROXY_BASE}?code=${encodeURIComponent(code)}`);
