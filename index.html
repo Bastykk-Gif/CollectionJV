@@ -196,6 +196,23 @@ a{color:inherit;}
 .combo-select{display:block; width:100%;}
 .combo-new-input{width:100%; margin-top:6px;}
 .combo-new-input[hidden]{display:none !important;}
+
+.title-row{display:flex; gap:6px; align-items:center;}
+.title-row input{flex:1;}
+.tgdb-btn{flex:0 0 auto; background:transparent; border:1px solid var(--ink-soft); border-radius:5px; padding:4px 9px; cursor:pointer; font-size:.92rem; line-height:1;}
+.tgdb-btn:hover{border-color:var(--stamp);}
+.tgdb-panel{margin-top:8px; padding-top:10px; border-top:1px dashed rgba(42,33,24,.3);}
+.tgdb-panel[hidden]{display:none;}
+.tgdb-msg{font-family:'Inter',sans-serif; font-size:.78rem; color:var(--ink-soft); margin-bottom:6px;}
+.tgdb-cands{display:grid; grid-template-columns:repeat(auto-fill,minmax(92px,1fr)); gap:8px; max-height:280px; overflow-y:auto;}
+.tgdb-cand{border:2px solid transparent; border-radius:5px; overflow:hidden; cursor:pointer; background:rgba(42,33,24,.06); position:relative; text-align:left; padding:0;}
+.tgdb-cand img{width:100%; height:110px; object-fit:contain; background:rgba(42,33,24,.08); display:block;}
+.tgdb-cand .info{padding:3px 5px; font-size:.6rem; color:var(--ink-soft); font-family:'Inter',sans-serif; line-height:1.3;}
+.tgdb-cand:hover{border-color:var(--brass);}
+.tgdb-cand .badge{position:absolute; top:3px; right:3px; font-size:.56rem; padding:1px 5px; border-radius:3px; font-weight:700;}
+.tgdb-cand .badge.match{background:var(--ok); color:#0e1a11;}
+.tgdb-cand .badge.mismatch{background:var(--stamp); color:#fff;}
+.tgdb-empty{font-family:'Inter',sans-serif; font-size:.8rem; color:var(--ink-soft);}
 .card-actions{display:flex; gap:9px; margin-top:18px; flex-wrap:wrap;}
 .btn{font-family:'Inter',sans-serif; font-weight:600; font-size:.88rem; padding:10px 16px; border-radius:6px; border:1px solid var(--ink); background:transparent; color:var(--ink); cursor:pointer;}
 .btn.primary{background:var(--ink); color:var(--card); border-color:var(--ink);}
@@ -387,6 +404,127 @@ const FIELD_DEFS = [
   {key:'r', label:'Région'},
 ];
 
+/* ---------- TheGamesDB : jaquette + infos automatiques depuis le titre ---------- */
+const TGDB_API_BASE = 'https://api.thegamesdb.net/v1';
+const TGDB_API_KEY = '560accacd1ec61db2647e19ca3cc00cf07bf9ce569b626cbb5dfb5a9606844bd';
+
+// Correspondance entre nos noms de plateforme et les noms utilisés par TheGamesDB,
+// pour filtrer/mettre en avant les bons résultats. Filtre "souple" : une plateforme
+// non reconnue ici n'exclut jamais un résultat, elle n'aide juste pas à le trier.
+const TGDB_PLATFORM_ALIASES = {
+  'Amstrad': { include: ['amstrad cpc'] },
+  'Atari 2600': { include: ['atari 2600'] },
+  'Atari 400/800/XL/XE': { include: ['atari 8-bit', 'atari 400', 'atari 800'] },
+  'Colecovision': { include: ['colecovision'] },
+  'Commodore 64': { include: ['commodore 64', 'c64'] },
+  'Dreamcast': { include: ['dreamcast'] },
+  'Game Boy': { include: ['game boy'], exclude: ['advance', 'color'] },
+  'Game Boy Advance': { include: ['game boy advance'] },
+  'Game Boy Color': { include: ['game boy color'] },
+  'Game Gear': { include: ['game gear'] },
+  'Gamecube': { include: ['gamecube', 'game cube'] },
+  'Intellivision': { include: ['intellivision'] },
+  'Megadrive': { include: ['mega drive', 'genesis'] },
+  'MSX': { include: ['msx'] },
+  'NES': { include: ['entertainment system', 'nes'], exclude: ['super'] },
+  'Nintendo 3DS': { include: ['nintendo 3ds'] },
+  'Nintendo 64': { include: ['nintendo 64'] },
+  'Nintendo DS': { include: ['nintendo ds'], exclude: ['3ds'] },
+  'PC': { include: ['pc', 'windows', 'steam', 'dos'] },
+  'Playstation': { include: ['playstation'], exclude: ['2', '3', '4', '5', 'vita', 'portable'] },
+  'Playstation 2': { include: ['playstation 2'] },
+  'Playstation 3': { include: ['playstation 3'] },
+  'Playstation 4': { include: ['playstation 4'] },
+  'Playstation 5': { include: ['playstation 5'] },
+  'PS VITA': { include: ['vita'] },
+  'PSP': { include: ['psp', 'portable'] },
+  'Saturn': { include: ['saturn'] },
+  'Super NES': { include: ['super nintendo', 'snes'] },
+  'Switch': { include: ['switch'], exclude: ['switch 2'] },
+  'Switch 2': { include: ['switch 2'] },
+  'Wii': { include: ['wii'], exclude: ['wii u'] },
+  'WiiU': { include: ['wii u'] },
+  'Xbox': { include: ['xbox'], exclude: ['360', 'one', 'series'] },
+  'Xbox 360': { include: ['xbox 360'] },
+  'Xbox One': { include: ['xbox one'] },
+  'ZX Spectrum': { include: ['zx spectrum'] },
+};
+function tgdbPlatformMatches(ourPlatform, tgdbPlatformName){
+  const alias = TGDB_PLATFORM_ALIASES[ourPlatform];
+  if(!alias) return null; // inconnu : ni confirmé, ni exclu
+  const name = String(tgdbPlatformName || '').toLowerCase();
+  if(alias.exclude && alias.exclude.some(x => name.includes(x))) return false;
+  return alias.include.some(x => name.includes(x));
+}
+
+let tgdbPlatformNames = null, tgdbGenreNames = null, tgdbPublisherNames = null, tgdbDeveloperNames = null;
+async function tgdbFetchIdNameMap(endpoint, dataKey, cacheKey){
+  try{
+    const cached = localStorage.getItem(cacheKey);
+    if(cached) return JSON.parse(cached);
+  }catch{}
+  const res = await fetch(`${TGDB_API_BASE}/${endpoint}?apikey=${encodeURIComponent(TGDB_API_KEY)}`);
+  if(!res.ok) throw new Error(`TheGamesDB /${endpoint} a échoué (${res.status})`);
+  const json = await res.json();
+  const map = {};
+  for(const [id, o] of Object.entries(json?.data?.[dataKey] || {})) map[id] = o.name || '';
+  try{ localStorage.setItem(cacheKey, JSON.stringify(map)); }catch{}
+  return map;
+}
+async function tgdbEnsureLookups(){
+  const [platforms, genres, publishers, developers] = await Promise.all([
+    tgdbPlatformNames || tgdbFetchIdNameMap('Platforms', 'platforms', 'tgdb_platforms_v1'),
+    tgdbGenreNames || tgdbFetchIdNameMap('Genres', 'genres', 'tgdb_genres_v1'),
+    tgdbPublisherNames || tgdbFetchIdNameMap('Publishers', 'publishers', 'tgdb_publishers_v1'),
+    tgdbDeveloperNames || tgdbFetchIdNameMap('Developers', 'developers', 'tgdb_developers_v1'),
+  ]);
+  tgdbPlatformNames = platforms; tgdbGenreNames = genres; tgdbPublisherNames = publishers; tgdbDeveloperNames = developers;
+}
+
+// Cherche un jeu par titre sur TheGamesDB et renvoie une entrée par jaquette recto
+// trouvée, avec la plateforme/année/genre/éditeur/développeur du jeu associé.
+// Si ourPlatform est fourni, exclut les jaquettes d'une autre plateforme confirmée
+// et met en avant celles dont la plateforme correspond.
+async function tgdbSearchCovers(title, ourPlatform){
+  await tgdbEnsureLookups();
+  const url = `${TGDB_API_BASE}/Games/ByGameName?apikey=${encodeURIComponent(TGDB_API_KEY)}&name=${encodeURIComponent(title)}&include=boxart,platform&fields=platform,release_date,genres,publishers,developers`;
+  const res = await fetch(url);
+  if(!res.ok) throw new Error(`Recherche TheGamesDB échouée (${res.status})`);
+  const json = await res.json();
+  const games = json?.data?.games || [];
+  const imagesByGameId = json?.include?.boxart?.data || {};
+  const baseUrl = json?.include?.boxart?.base_url?.original || json?.include?.boxart?.base_url?.large || json?.include?.boxart?.base_url?.medium || '';
+
+  const candidates = [];
+  for(const g of games){
+    const entry = imagesByGameId[String(g.id)];
+    if(!entry) continue;
+    const list = Array.isArray(entry) ? entry : Object.values(entry).flat();
+    const fronts = list.filter(im => im && (im.side === 'front' || im.type === 'boxart') && im.side !== 'back');
+    if(!fronts.length) continue;
+    const platformName = tgdbPlatformNames[String(g.platform)] || '';
+    const platformMatch = ourPlatform ? tgdbPlatformMatches(ourPlatform, platformName) : null;
+    const year = (g.release_date || '').slice(0, 4);
+    const genre = Array.isArray(g.genres) && g.genres.length ? (tgdbGenreNames[String(g.genres[0])] || '') : '';
+    const publisher = Array.isArray(g.publishers) && g.publishers.length ? (tgdbPublisherNames[String(g.publishers[0])] || '') : '';
+    const developer = Array.isArray(g.developers) && g.developers.length ? (tgdbDeveloperNames[String(g.developers[0])] || '') : '';
+    for(const im of fronts){
+      const filename = im.filename || im.url;
+      if(!filename) continue;
+      candidates.push({
+        url: filename.startsWith('http') ? filename : baseUrl + filename,
+        gameTitle: g.game_title, platformName, platformMatch, year, genre, publisher, developer,
+      });
+    }
+  }
+  const filtered = ourPlatform ? candidates.filter(c => c.platformMatch !== false) : candidates;
+  filtered.sort((a, b) => {
+    const score = c => c.platformMatch === true ? 0 : c.platformMatch === null ? 1 : 2;
+    return score(a) - score(b);
+  });
+  return filtered;
+}
+
 let allGames = [];
 const state = { q:'', mode:'all', value:null };
 
@@ -419,6 +557,30 @@ function compressImage(file, maxDim=640, quality=0.72){
       resolve(dataUrl);
     };
     img.onerror = ()=>{ URL.revokeObjectURL(url); reject(new Error('Lecture de l\'image impossible')); };
+    img.src = url;
+  });
+}
+
+// Même logique que compressImage(), mais depuis une URL externe (jaquette TheGamesDB).
+// tainted=true signale un blocage CORS du canvas : à traiter en repli sur l'URL brute.
+function compressImageFromUrl(url, maxDim=640, quality=0.72){
+  return new Promise((resolve, reject)=>{
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = ()=>{
+      let { width, height } = img;
+      if(width > height && width > maxDim){ height = Math.round(height * maxDim/width); width = maxDim; }
+      else if(height > maxDim){ width = Math.round(width * maxDim/height); height = maxDim; }
+      const canvas = document.createElement('canvas');
+      canvas.width = width; canvas.height = height;
+      canvas.getContext('2d').drawImage(img, 0, 0, width, height);
+      let dataUrl;
+      try{ dataUrl = canvas.toDataURL('image/jpeg', quality); }
+      catch(err){ reject(Object.assign(new Error('tainted'), { tainted:true })); return; }
+      if(dataUrl.length > 900000){ reject(new Error('Image trop volumineuse même après compression')); return; }
+      resolve(dataUrl);
+    };
+    img.onerror = ()=> reject(Object.assign(new Error("Lecture de l'image impossible"), { tainted:true }));
     img.src = url;
   });
 }
@@ -983,15 +1145,17 @@ function buildComboField(key, label, currentValue, options, required){
   </div>`;
 }
 
+let tgdbLastSearchedTitle = '';
 function renderCard(g, editMode){
   editMode = editMode && !isReadOnly();
+  if(editMode) tgdbLastSearchedTitle = '';
   cardEl.style.setProperty('--accent', `var(${CAT_VAR[g.cat] || '--brass'})`);
   const isNewEntry = !g.id;
   const idNum = g.id ? g.id.replace(/[^0-9]/g,'').slice(-4).padStart(4,'0') : '????';
 
   let fieldsHtml = '';
   if(editMode){
-    fieldsHtml += `<div class="field required"><dt>Titre</dt><dd><input type="text" id="f_n" value="${escapeAttr(g.n)}" placeholder="Titre du jeu"></dd></div>`;
+    fieldsHtml += `<div class="field required"><dt>Titre</dt><dd><div class="title-row"><input type="text" id="f_n" value="${escapeAttr(g.n)}" placeholder="Titre du jeu"><button type="button" id="tgdbSearchBtn" class="tgdb-btn" title="Chercher la jaquette et les infos sur TheGamesDB">🔍</button></div></dd></div>`;
     fieldsHtml += buildComboField('cat', 'Univers', g.cat||'', distinctValues('cat').length ? distinctValues('cat') : CATS.slice(), true);
     FIELD_DEFS.forEach(fd=>{
       if(fd.key === 'y'){
@@ -1023,6 +1187,7 @@ function renderCard(g, editMode){
     <h2 class="card-title" id="cardTitle">${editMode ? '' : escapeHtml(g.n)}</h2>
     <div class="card-sub">${escapeHtml(g.cat)}${isNewEntry ? ' · Nouvelle fiche' : (g.id && g.id.startsWith('u') ? ' · Ajout personnel' : '')}</div>
     <dl class="fields">${fieldsHtml}</dl>
+    ${editMode ? '<div class="tgdb-panel" id="tgdbPanel" hidden><div class="tgdb-msg" id="tgdbMsg"></div><div class="tgdb-cands" id="tgdbCands"></div></div>' : ''}
     <p class="card-error" id="cardError">Le titre et la plateforme sont nécessaires pour enregistrer cette fiche.</p>
     <div class="card-actions" id="cardActions"></div>
   `;
@@ -1076,6 +1241,21 @@ function renderCard(g, editMode){
         renderCard(Object.assign({}, g, vals, {img:''}), true);
       });
     }
+    const tgdbBtn = document.getElementById('tgdbSearchBtn');
+    const titleInput = document.getElementById('f_n');
+    if(tgdbBtn && titleInput){
+      let skipNextTitleBlurSearch = false;
+      tgdbBtn.addEventListener('mousedown', ()=>{ skipNextTitleBlurSearch = true; });
+      tgdbBtn.addEventListener('click', ()=> runTgdbSearch(g));
+      titleInput.addEventListener('keydown', e=>{
+        if(e.key === 'Enter'){ e.preventDefault(); runTgdbSearch(g); }
+      });
+      titleInput.addEventListener('blur', ()=>{
+        if(skipNextTitleBlurSearch){ skipNextTitleBlurSearch = false; return; }
+        const v = titleInput.value.trim();
+        if(v && v !== tgdbLastSearchedTitle) runTgdbSearch(g);
+      });
+    }
     cardEl.querySelectorAll('.combo-select').forEach(sel=>{
       sel.addEventListener('change', ()=>{
         const inp = document.getElementById('f_'+sel.dataset.key);
@@ -1115,6 +1295,60 @@ function renderCard(g, editMode){
     });
     actions.appendChild(editBtn); actions.appendChild(delBtn); actions.appendChild(closeBtn);
   }
+}
+
+async function runTgdbSearch(g){
+  const titleInput = document.getElementById('f_n');
+  const panel = document.getElementById('tgdbPanel');
+  const msgEl = document.getElementById('tgdbMsg');
+  const title = titleInput ? titleInput.value.trim() : '';
+  if(!title || !panel || !msgEl) return;
+  tgdbLastSearchedTitle = title;
+  panel.hidden = false;
+  msgEl.textContent = 'Recherche sur TheGamesDB…';
+  document.getElementById('tgdbCands').innerHTML = '';
+  try{
+    const platform = comboValue('p');
+    const candidates = await tgdbSearchCovers(title, platform);
+    msgEl.textContent = candidates.length ? `${candidates.length} résultat(s) — clic pour appliquer jaquette + infos` : 'Aucun résultat trouvé.';
+    renderTgdbCandidates(candidates, g);
+  }catch(err){
+    console.error(err);
+    msgEl.textContent = err.message || 'Erreur de recherche.';
+  }
+}
+
+function renderTgdbCandidates(list, g){
+  const box = document.getElementById('tgdbCands');
+  if(!box) return;
+  box.innerHTML = '';
+  list.slice(0, 24).forEach(c=>{
+    const div = document.createElement('div');
+    div.className = 'tgdb-cand';
+    const badge = c.platformMatch === true ? '<span class="badge match">plateforme ok</span>'
+      : c.platformMatch === false ? '<span class="badge mismatch">autre plateforme</span>' : '';
+    const infoBits = [c.gameTitle, c.platformName, c.year].filter(Boolean).join(' · ');
+    div.innerHTML = `${badge}<img src="${escapeAttr(c.url)}" loading="lazy" alt="">
+      <div class="info">${escapeHtml(infoBits)}</div>`;
+    div.addEventListener('click', ()=>applyTgdbCandidate(g, c));
+    box.appendChild(div);
+  });
+}
+
+async function applyTgdbCandidate(g, cand){
+  const vals = readForm();
+  const merged = Object.assign({}, g, vals);
+  if(cand.year) merged.y = cand.year;
+  if(cand.genre) merged.g = cand.genre;
+  if(cand.publisher) merged.pub = cand.publisher;
+  if(cand.developer) merged.dev = cand.developer;
+  try{
+    merged.img = await compressImageFromUrl(cand.url);
+  }catch(err){
+    if(err.tainted){ merged.img = cand.url; }
+    else { alert(err.message || "Échec de la récupération de la jaquette."); return; }
+  }
+  renderCard(merged, true);
 }
 
 function comboValue(key){
