@@ -1245,7 +1245,7 @@ function render(){
   else if(state.mode === 'platform') filtered = filtered.filter(g=>g.p===state.value);
   if(state.q.trim()){
     const q = state.q.trim().toLowerCase();
-    filtered = filtered.filter(g => [g.n,g.pub,g.dev,g.f,g.g,g.p].join(' ').toLowerCase().includes(q));
+    filtered = filtered.filter(g => [g.n,g.pub,g.dev,g.f,g.g,g.p,g.y].join(' ').toLowerCase().includes(q));
   }
   document.getElementById('resultCount').textContent = `${filtered.length} / ${allGames.length} fiches`;
 
