@@ -677,8 +677,7 @@ function openCropOverlay(file, onConfirm){
     cropCanvasEl.width = canvas.width; cropCanvasEl.height = canvas.height;
     cropCanvasEl.getContext('2d').drawImage(canvas, 0, 0);
     cropSvgEl.setAttribute('viewBox', `0 0 ${canvas.width} ${canvas.height}`);
-    const mx = Math.round(canvas.width*0.03), my = Math.round(canvas.height*0.03);
-    cropPoints = [[mx,my],[canvas.width-mx,my],[canvas.width-mx,canvas.height-my],[mx,canvas.height-my]];
+    cropPoints = [[0,0],[canvas.width,0],[canvas.width,canvas.height],[0,canvas.height]];
     buildCropSvg();
     cropOverlayEl.hidden = false;
   }).catch(err=>{
