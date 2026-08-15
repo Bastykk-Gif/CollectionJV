@@ -1075,23 +1075,14 @@ document.getElementById('logoutBtn').addEventListener('click', ()=>auth.signOut(
 function sortWithin(list){
   return list.slice().sort((a,b)=> collator(a.n,b.n));
 }
-// Numéro affiché sur la fiche (tampon rouge) : position alphabétique de l'objet parmi les
-// fiches du bouton actuellement sélectionné dans le menu (constructeur, console, sous-catégorie…).
+// Numéro affiché sur la fiche (tampon rouge) : position alphabétique de l'objet dans la liste
+// complète "Tout afficher" de sa section — fixe, indépendante du bouton/filtre actuellement actif.
 function gameAlphaPosition(id){
-  let list = allGames;
-  if(state.mode === 'family') list = list.filter(g=>g.cat===state.value);
-  else if(state.mode === 'platform') list = list.filter(g=>g.p===state.value);
-  let idx = sortWithin(list).findIndex(g=>g.id===id);
-  if(idx < 0) idx = sortWithin(allGames).findIndex(g=>g.id===id);
+  const idx = sortWithin(allGames).findIndex(g=>g.id===id);
   return idx >= 0 ? idx+1 : null;
 }
 function catalogAlphaPosition(id){
-  const sectionItems = catalogItemsForSection();
-  let list = sectionItems;
-  if(state.mode === 'family') list = list.filter(it=>(it.cat||'')===state.value);
-  else if(state.mode === 'subcat') list = list.filter(it=>it.sousCat===state.value);
-  let idx = sortWithin(list).findIndex(it=>it.id===id);
-  if(idx < 0) idx = sortWithin(sectionItems).findIndex(it=>it.id===id);
+  const idx = sortWithin(catalogItemsForSection()).findIndex(it=>it.id===id);
   return idx >= 0 ? idx+1 : null;
 }
 // Ordre de consoles personnalisé par constructeur (remplace le tri chronologique par défaut)
