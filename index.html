@@ -242,7 +242,7 @@ a{color:inherit;}
   .console-grid{grid-template-columns:repeat(auto-fill,minmax(108px,1fr)); gap:10px;}
   .index-card{padding:30px 18px 20px;}
   .digit{font-size:1.4rem;}
-  .hero{padding:46px 16px 22px;}
+  .hero{padding:64px 16px 22px;}
   .result-count{margin-left:0; width:100%;}
 }
 @media (prefers-reduced-motion:reduce){
@@ -1116,14 +1116,20 @@ function consoleOrder(list){
 }
 /* ---------- rendering ---------- */
 let heroInit = false;
+let tickerGen = 0;
 function renderTicker(total){
   const tickerEl = document.getElementById('tickerCount');
   const target = String(total).padStart(4,'0');
   const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const myGen = ++tickerGen;
   if(!heroInit && !reduced && total>0){
     heroInit = true;
     const start = performance.now(), dur = 800;
     function step(now){
+      // Le compteur des jeux arrive avant celui du catalogue : si un second appel a
+      // démarré entre-temps (total corrigé), cette animation devenue obsolète s'arrête
+      // au lieu d'écraser la bonne valeur une fois son propre décompte terminé.
+      if(myGen !== tickerGen) return;
       const p = Math.min(1, (now-start)/dur);
       const val = Math.floor(p*total);
       tickerEl.innerHTML = String(val).padStart(4,'0').split('').map(d=>`<span class="digit">${d}</span>`).join('');
