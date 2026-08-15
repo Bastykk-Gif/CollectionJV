@@ -1263,7 +1263,7 @@ function buildTile(g){
   div.setAttribute('role','button');
   div.dataset.id = g.id;
   div.innerHTML = `<div class="box-art" style="--accent:var(${CAT_VAR[g.cat]||'--brass'});aspect-ratio:${ratioFor(g.p)}">${buildArtInner(g)}</div>
-    <div class="box-label"><div class="box-title">${escapeHtml(g.n)}</div><div class="box-year">${escapeHtml(g.y||'—')}</div></div>`;
+    <div class="box-label"><div class="box-title">${escapeHtml(g.n)}</div><div class="box-year">${escapeHtml(g.p||'—')}</div></div>`;
   div.addEventListener('click', ()=>openCard(g.id));
   div.addEventListener('keydown', e=>{ if(e.key==='Enter'||e.key===' '){ e.preventDefault(); openCard(g.id); } });
   return div;
