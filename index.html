@@ -434,6 +434,8 @@ const DERIVE_SUBCATS = ['Accessoires','Amiibo','Figurines','Jouets','Livres','Ma
 const MUSIQUE_SUBCATS = ['K7','CD','Vinyles','OST'];
 const TYPES_WITH_SUBCAT = ['derive','musique'];
 function subcatOptionsFor(type){ return type === 'derive' ? DERIVE_SUBCATS : type === 'musique' ? MUSIQUE_SUBCATS : null; }
+// K7/CD/Vinyles : pas de champ "Nom" saisi à la main, le titre de la fiche est dérivé de Artiste + Album.
+function isMusicNamed(type, sousCat){ return type === 'musique' && (sousCat === 'K7' || sousCat === 'CD' || sousCat === 'Vinyles'); }
 // Un objet non affilié à l'un des 6 constructeurs suivis reçoit un liseré blanc plutôt qu'une couleur.
 function catAccentVar(cat){ return CAT_VAR[cat] || '--c-neutral'; }
 function catHexOrWhite(cat){ return CAT_HEX[cat] || '#FFFFFF'; }
@@ -1402,9 +1404,11 @@ function buildCatalogTile(it){
   div.tabIndex = 0;
   div.setAttribute('role','button');
   div.dataset.id = it.id;
-  const sub = it.y || it.sousCat || it.dateParution || it.remarque || '—';
+  const namedByMusic = isMusicNamed(it.type, it.sousCat);
+  const title = namedByMusic ? (it.artiste || '—') : it.n;
+  const sub = namedByMusic ? (it.album || '—') : (it.y || it.sousCat || it.dateParution || it.remarque || '—');
   div.innerHTML = `<div class="box-art" style="--accent:var(${catAccentVar(it.cat)});aspect-ratio:${catalogRatioFor(it)}">${buildCatalogArtInner(it)}</div>
-    <div class="box-label"><div class="box-title">${escapeHtml(it.n)}</div><div class="box-year">${escapeHtml(sub)}</div></div>`;
+    <div class="box-label"><div class="box-title">${escapeHtml(title)}</div><div class="box-year">${escapeHtml(sub)}</div></div>`;
   div.addEventListener('click', ()=>openCatalogCard(it.id));
   div.addEventListener('keydown', e=>{ if(e.key==='Enter'||e.key===' '){ e.preventDefault(); openCatalogCard(it.id); } });
   return div;
@@ -1530,8 +1534,8 @@ function buildCatalogFieldHtml(key, it){
   if(key === 'consoleLiee') return buildComboField('consoleLiee', label, val, distinctCatalogValues('n','console'), false);
   if(key === 'jeuLie') return buildComboField('jeuLie', label, val, distinctValues('n'), false);
   if(key === 'fabricant') return buildComboField('fabricant', label, val, distinctCatalogValues('fabricant'), false);
-  if(key === 'artiste') return buildComboField('artiste', label, val, distinctCatalogValues('artiste'), false);
-  if(key === 'album') return `<div class="field"><dt>${label}</dt><dd><input type="text" id="f_album" value="${escapeAttr(val)}" placeholder="Nom de l'album"></dd></div>`;
+  if(key === 'artiste') return buildComboField('artiste', label, val, distinctCatalogValues('artiste'), true);
+  if(key === 'album') return `<div class="field required"><dt>${label}</dt><dd><input type="text" id="f_album" value="${escapeAttr(val)}" placeholder="Nom de l'album"></dd></div>`;
   return '';
 }
 function findCatalogItem(id){ return allCatalog.find(it=>it.id===id); }
@@ -1738,6 +1742,7 @@ function renderCatalogCard(it, editMode){
   const itemRatio = catalogRatioFor(it);
 
   const usesSubcat = TYPES_WITH_SUBCAT.includes(it.type);
+  const namedByMusic = isMusicNamed(it.type, it.sousCat);
   let fieldsHtml = '';
   if(editMode){
     const typeOptions = SECTION_DEFS.filter(s=>s.type).map(s=>({value:s.type, label:TYPE_LABELS[s.type]}));
@@ -1745,7 +1750,7 @@ function renderCatalogCard(it, editMode){
     fieldsHtml += `<div class="field required"><dt>Type</dt><dd><select id="f_type">
         ${typeOptions.map(o=>`<option value="${o.value}" ${it.type===o.value?'selected':''}>${escapeHtml(o.label)}</option>`).join('')}
       </select></dd></div>`;
-    fieldsHtml += `<div class="field required"><dt>Nom</dt><dd><input type="text" id="f_n" value="${escapeAttr(it.n)}" placeholder="Nom de l'objet"></dd></div>`;
+    if(!namedByMusic) fieldsHtml += `<div class="field required"><dt>Nom</dt><dd><input type="text" id="f_n" value="${escapeAttr(it.n)}" placeholder="Nom de l'objet"></dd></div>`;
     if(usesSubcat) fieldsHtml += buildComboField('sousCat', 'Sous-catégorie', it.sousCat||'', subcatOptionsFor(it.type), true);
     catalogFieldKeysFor(it.type, it.sousCat).forEach(key=>{ fieldsHtml += buildCatalogFieldHtml(key, it); });
   } else {
@@ -1770,7 +1775,7 @@ function renderCatalogCard(it, editMode){
     <h2 class="card-title" id="cardTitle">${editMode ? '' : escapeHtml(it.n)}</h2>
     <div class="card-sub">${escapeHtml(TYPE_LABELS[it.type]||'')}${isNewEntry ? ' · Nouvelle fiche' : (it.id && it.id.startsWith('x') ? ' · Ajout personnel' : '')}</div>
     <dl class="fields">${fieldsHtml}</dl>
-    <p class="card-error" id="cardError">Le nom${usesSubcat ? ' et la sous-catégorie sont' : ' est'} nécessaire${usesSubcat ? 's' : ''} pour enregistrer cette fiche.</p>
+    <p class="card-error" id="cardError">${namedByMusic ? "L'artiste et le nom de l'album sont nécessaires" : `Le nom${usesSubcat ? ' et la sous-catégorie sont' : ' est'} nécessaire${usesSubcat ? 's' : ''}`} pour enregistrer cette fiche.</p>
     <div class="card-actions" id="cardActions"></div>
   `;
 
@@ -1950,10 +1955,16 @@ function readCatalogForm(){
   const getPlain = id => { const el = document.getElementById(id); return el ? el.value.trim() : ''; };
   const getCombo = key => document.getElementById('f_'+key+'_sel') ? comboValue(key) : '';
   const typeEl = document.getElementById('f_type');
+  const type = typeEl ? typeEl.value : undefined;
+  const sousCat = getCombo('sousCat');
+  const artiste = getCombo('artiste');
+  const album = getPlain('f_album');
+  // K7/CD/Vinyles : pas de champ Nom saisi, le titre de la fiche est dérivé de Artiste + Album.
+  const n = isMusicNamed(type, sousCat) ? [artiste, album].filter(Boolean).join(' — ') : getPlain('f_n');
   return {
-    type: typeEl ? typeEl.value : undefined,
-    n: getPlain('f_n'),
-    sousCat: getCombo('sousCat'),
+    type,
+    n,
+    sousCat,
     y: getPlain('f_y'),
     pays: getCombo('pays'),
     remarque: getCombo('remarque'),
@@ -1962,8 +1973,8 @@ function readCatalogForm(){
     fabricant: getCombo('fabricant'),
     numero: getPlain('f_numero'),
     dateParution: getPlain('f_dateParution'),
-    artiste: getCombo('artiste'),
-    album: getPlain('f_album'),
+    artiste,
+    album,
   };
 }
 
@@ -1973,7 +1984,8 @@ async function saveCatalogCard(it, isNewEntry, btn){
   vals.img = it.img || '';
   if(vals.type === undefined) vals.type = it.type;
   if(!TYPES_WITH_SUBCAT.includes(vals.type)) vals.sousCat = '';
-  if(!vals.n || (TYPES_WITH_SUBCAT.includes(vals.type) && !vals.sousCat)){ document.getElementById('cardError').classList.add('show'); return; }
+  const missingMusicNames = isMusicNamed(vals.type, vals.sousCat) && (!vals.artiste || !vals.album);
+  if(!vals.n || (TYPES_WITH_SUBCAT.includes(vals.type) && !vals.sousCat) || missingMusicNames){ document.getElementById('cardError').classList.add('show'); return; }
   btn.disabled = true;
   try{
     if(isNewEntry){
