@@ -406,7 +406,7 @@ const SECTION_DEFS = [
 ];
 const SECTION_BY_KEY = {}; SECTION_DEFS.forEach(s=>SECTION_BY_KEY[s.key]=s);
 const DERIVE_SUBCATS = ['Accessoires','Amiibo','Figurines','Jouets','Livres','Magazines','Peluches','PLV',"Son & Image"];
-const MUSIQUE_SUBCATS = ['K7','CD','Vinyles','OST'];
+const MUSIQUE_SUBCATS = ['K7','CD','Vinyles'];
 const TYPES_WITH_SUBCAT = ['derive','musique'];
 function subcatOptionsFor(type){ return type === 'derive' ? DERIVE_SUBCATS : type === 'musique' ? MUSIQUE_SUBCATS : null; }
 // K7/CD/Vinyles : pas de champ "Nom" saisi à la main, le titre de la fiche est dérivé de Artiste + Album.
@@ -955,6 +955,23 @@ async function ensureCatalogMigrationV3(meta){
   await metaDoc.set({ catalogMigrationV3:true, catalogMigrationV3At: firebase.firestore.FieldValue.serverTimestamp() }, {merge:true});
 }
 
+async function ensureCatalogMigrationV4(meta){
+  if(meta.catalogMigrationV4) return;
+
+  // Retour en arrière de la migration V3 : Musique > OST rebascule entièrement vers
+  // Produits dérivés > Son & Image.
+  {
+    const snap = await catalogCol.where('type','==','musique').where('sousCat','==','OST').get();
+    for(const chunk of chunkArray(snap.docs, 400)){
+      const batch = db.batch();
+      chunk.forEach(d=>batch.update(d.ref, {type:'derive', sousCat:'Son & Image'}));
+      await batch.commit();
+    }
+  }
+
+  await metaDoc.set({ catalogMigrationV4:true, catalogMigrationV4At: firebase.firestore.FieldValue.serverTimestamp() }, {merge:true});
+}
+
 function subscribeCatalog(){
   catalogCol.onSnapshot(snap=>{
     allCatalog = snap.docs.map(d=>Object.assign({id:d.id}, d.data()));
@@ -996,6 +1013,7 @@ async function init(){
       await ensureCatalogSeeded(meta);
       await ensureCatalogMigrationV2(meta);
       await ensureCatalogMigrationV3(meta);
+      await ensureCatalogMigrationV4(meta);
     }
   }catch(err){
     console.error(err);
