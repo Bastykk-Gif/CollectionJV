@@ -10,7 +10,6 @@
 <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
-<script src="https://unpkg.com/@zxing/library@0.21.3/umd/index.min.js"></script>
 <style>
 :root{
   --bg:#141110; --bg-soft:#1B1715; --panel:#211C19;
@@ -497,6 +496,23 @@ async function upcLookupTitle(code){
   return item && item.title ? cleanUpcTitle(item.title) : '';
 }
 
+// Bibliothèque de scan de code-barres chargée à la demande seulement (gros script tiers
+// inutile au premier affichage de la page — ne doit pas retarder le chargement du fichier).
+let zxingLoadPromise = null;
+function loadZXing(){
+  if(window.ZXing) return Promise.resolve();
+  if(!zxingLoadPromise){
+    zxingLoadPromise = new Promise((resolve, reject)=>{
+      const s = document.createElement('script');
+      s.src = 'https://unpkg.com/@zxing/library@0.21.3/umd/index.min.js';
+      s.onload = resolve;
+      s.onerror = ()=>{ zxingLoadPromise = null; reject(new Error('Impossible de charger le lecteur de code-barres.')); };
+      document.head.appendChild(s);
+    });
+  }
+  return zxingLoadPromise;
+}
+
 let barcodeReader = null;
 async function openBarcodeScanner(){
   const overlay = document.getElementById('scanOverlay');
@@ -505,6 +521,7 @@ async function openBarcodeScanner(){
   msgEl.textContent = '';
   overlay.hidden = false;
   try{
+    await loadZXing();
     const hints = new Map();
     hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS, [
       ZXing.BarcodeFormat.EAN_13, ZXing.BarcodeFormat.EAN_8,
@@ -941,9 +958,8 @@ function setStatus(kind, text){
 }
 
 /* ---------- seed + subscribe ---------- */
-async function ensureSeeded(){
-  const metaSnap = await metaDoc.get();
-  if(metaSnap.exists && metaSnap.data().seeded) return;
+async function ensureSeeded(meta){
+  if(meta.seeded) return;
   const chunks = chunkArray(GAMES_BASE, 400);
   for(const chunk of chunks){
     const batch = db.batch();
@@ -956,9 +972,8 @@ async function ensureSeeded(){
   await metaDoc.set({ seeded:true, seededAt: firebase.firestore.FieldValue.serverTimestamp() });
 }
 
-async function ensureCatalogSeeded(){
-  const metaSnap = await metaDoc.get();
-  if(metaSnap.exists && metaSnap.data().catalogSeeded) return;
+async function ensureCatalogSeeded(meta){
+  if(meta.catalogSeeded) return;
   const chunks = chunkArray(CATALOG_BASE, 400);
   for(const chunk of chunks){
     const batch = db.batch();
@@ -974,9 +989,8 @@ async function ensureCatalogSeeded(){
 // Corrections ponctuelles appliquées une seule fois aux fiches déjà seedées (le tableau
 // CATALOG_BASE ne sert qu'à l'import initial : le republier ne met pas à jour les documents
 // déjà en base). Chaque étape est sans effet si elle a déjà été appliquée.
-async function ensureCatalogMigrationV2(){
-  const metaSnap = await metaDoc.get();
-  if(metaSnap.exists && metaSnap.data().catalogMigrationV2) return;
+async function ensureCatalogMigrationV2(meta){
+  if(meta.catalogMigrationV2) return;
 
   // Renomme le constructeur "Retro 80's" en "Retro 80-90", jeux et catalogue confondus.
   for(const col of [gamesCol, catalogCol]){
@@ -1030,9 +1044,8 @@ async function ensureCatalogMigrationV2(){
   await metaDoc.set({ catalogMigrationV2:true, catalogMigrationV2At: firebase.firestore.FieldValue.serverTimestamp() }, {merge:true});
 }
 
-async function ensureCatalogMigrationV3(){
-  const metaSnap = await metaDoc.get();
-  if(metaSnap.exists && metaSnap.data().catalogMigrationV3) return;
+async function ensureCatalogMigrationV3(meta){
+  if(meta.catalogMigrationV3) return;
 
   // Thomson MO6 rejoint le constructeur "Autres" (le menu Consoles > PC devient vide et disparaît).
   {
@@ -1094,13 +1107,26 @@ function subscribe(){
 async function init(){
   setStatus('connecting');
   try{
-    if(!isReadOnly()){ await ensureSeeded(); await ensureCatalogSeeded(); await ensureCatalogMigrationV2(); await ensureCatalogMigrationV3(); }
+    // Le flux temps réel démarre tout de suite : les vérifications de départ (seed/migrations,
+    // une seule fois dans la vie du fichier) ne doivent pas retarder l'affichage des données déjà en base.
     subscribe();
     subscribeCatalog();
+    if(!isReadOnly()){
+      const metaSnap = await metaDoc.get();
+      const meta = metaSnap.exists ? metaSnap.data() : {};
+      await ensureSeeded(meta);
+      await ensureCatalogSeeded(meta);
+      await ensureCatalogMigrationV2(meta);
+      await ensureCatalogMigrationV3(meta);
+    }
   }catch(err){
     console.error(err);
-    setStatus('error', 'Connexion impossible — vérifiez les règles Firestore');
-    document.getElementById('shelf').innerHTML = `<div class="loading-state">Impossible d'initialiser le fichier sur Firebase.<br>Vérifiez que Firestore est activé et que les règles de sécurité autorisent la lecture/écriture.</div>`;
+    // Le flux temps réel (subscribe/subscribeCatalog) a pu afficher des données valides avant
+    // cette erreur : ne pas effacer un catalogue déjà visible pour un simple souci de migration.
+    if(allGames.length === 0){
+      setStatus('error', 'Connexion impossible — vérifiez les règles Firestore');
+      document.getElementById('shelf').innerHTML = `<div class="loading-state">Impossible d'initialiser le fichier sur Firebase.<br>Vérifiez que Firestore est activé et que les règles de sécurité autorisent la lecture/écriture.</div>`;
+    }
   }
 }
 
