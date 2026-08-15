@@ -1078,12 +1078,13 @@ function sortWithin(list){
   return list.slice().sort((a,b)=> collator(a.n,b.n));
 }
 // Musique : classement alphabétique par nom, année en repli pour départager deux fiches
-// portant exactement le même nom.
+// portant exactement le même nom, puis nom de l'album si en plus l'année est identique.
 function musicCompare(a, b){
   const nCmp = collator(a.n || '', b.n || '');
   if(nCmp !== 0) return nCmp;
   const yA = parseInt(a.y, 10) || 0, yB = parseInt(b.y, 10) || 0;
-  return yA - yB;
+  if(yA !== yB) return yA - yB;
+  return collator(a.album || '', b.album || '');
 }
 function sortCatalogList(list){
   if(list.length && list[0].type === 'musique') return list.slice().sort(musicCompare);
