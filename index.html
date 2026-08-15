@@ -1701,8 +1701,10 @@ function renderCatalogCard(it, editMode){
     fieldsHtml += `<div class="field required"><dt>Type</dt><dd><select id="f_type">
         ${typeOptions.map(o=>`<option value="${o.value}" ${it.type===o.value?'selected':''}>${escapeHtml(o.label)}</option>`).join('')}
       </select></dd></div>`;
-    if(!namedByMusic) fieldsHtml += `<div class="field required"><dt>Nom</dt><dd><input type="text" id="f_n" value="${escapeAttr(it.n)}" placeholder="Nom de l'objet"></dd></div>`;
+    const nomFieldHtml = `<div class="field required"><dt>Nom</dt><dd><input type="text" id="f_n" value="${escapeAttr(it.n)}" placeholder="Nom de l'objet"></dd></div>`;
+    if(!namedByMusic) fieldsHtml += nomFieldHtml;
     if(usesSubcat) fieldsHtml += buildComboField('sousCat', 'Sous-catégorie', it.sousCat||'', subcatOptionsFor(it.type), true);
+    if(namedByMusic) fieldsHtml += nomFieldHtml;
     catalogFieldKeysFor(it.type, it.sousCat).forEach(key=>{ fieldsHtml += buildCatalogFieldHtml(key, it); });
   } else {
     fieldsHtml += `<div class="field"><dt>Type</dt><dd>${escapeHtml(TYPE_LABELS[it.type]||'—')}</dd></div>`;
@@ -1726,7 +1728,7 @@ function renderCatalogCard(it, editMode){
     <h2 class="card-title" id="cardTitle">${editMode ? '' : escapeHtml(it.n)}</h2>
     <div class="card-sub">${escapeHtml(TYPE_LABELS[it.type]||'')}${isNewEntry ? ' · Nouvelle fiche' : (it.id && it.id.startsWith('x') ? ' · Ajout personnel' : '')}</div>
     <dl class="fields">${fieldsHtml}</dl>
-    <p class="card-error" id="cardError">${namedByMusic ? "L'artiste et le nom de l'album sont nécessaires" : `Le nom${usesSubcat ? ' et la sous-catégorie sont' : ' est'} nécessaire${usesSubcat ? 's' : ''}`} pour enregistrer cette fiche.</p>
+    <p class="card-error" id="cardError">${namedByMusic ? "Le nom, l'artiste et le nom de l'album sont nécessaires" : `Le nom${usesSubcat ? ' et la sous-catégorie sont' : ' est'} nécessaire${usesSubcat ? 's' : ''}`} pour enregistrer cette fiche.</p>
     <div class="card-actions" id="cardActions"></div>
   `;
 
@@ -1910,8 +1912,7 @@ function readCatalogForm(){
   const sousCat = getCombo('sousCat');
   const artiste = getCombo('artiste');
   const album = getPlain('f_album');
-  // K7/CD/Vinyles : pas de champ Nom saisi, le titre de la fiche est dérivé de Artiste + Album.
-  const n = isMusicNamed(type, sousCat) ? [artiste, album].filter(Boolean).join(' — ') : getPlain('f_n');
+  const n = getPlain('f_n');
   return {
     type,
     n,
