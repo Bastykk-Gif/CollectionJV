@@ -1077,15 +1077,13 @@ document.getElementById('logoutBtn').addEventListener('click', ()=>auth.signOut(
 function sortWithin(list){
   return list.slice().sort((a,b)=> collator(a.n,b.n));
 }
-// Musique : classement alphabétique par artiste, puis par année au sein d'un même artiste
-// (les OST, sans artiste renseigné, se classent par leur propre titre).
+// Musique : classement alphabétique par nom, année en repli pour départager deux fiches
+// portant exactement le même nom.
 function musicCompare(a, b){
-  const keyA = a.artiste || a.n || '', keyB = b.artiste || b.n || '';
-  const artCmp = collator(keyA, keyB);
-  if(artCmp !== 0) return artCmp;
+  const nCmp = collator(a.n || '', b.n || '');
+  if(nCmp !== 0) return nCmp;
   const yA = parseInt(a.y, 10) || 0, yB = parseInt(b.y, 10) || 0;
-  if(yA !== yB) return yA - yB;
-  return collator(a.n, b.n);
+  return yA - yB;
 }
 function sortCatalogList(list){
   if(list.length && list[0].type === 'musique') return list.slice().sort(musicCompare);
