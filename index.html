@@ -431,7 +431,10 @@ const PLATFORM_RATIO = {
   'Xbox One':'135/170', 'ZX Spectrum':'70/110',
 };
 const DEFAULT_RATIO = '135/190';
-const CATALOG_RATIO = '1/1'; // consoles/systèmes/accessoires/produits dérivés/musique : photos carrées
+const CATALOG_RATIO = '1/1'; // consoles/systèmes/accessoires/produits dérivés : photos carrées
+// Formats spécifiques à certaines sous-catégories Musique (le reste du catalogue reste carré).
+const MUSIQUE_RATIO = { 'K7':'100/64', 'CD':'142/125', 'Vinyles':'180/180' };
+function catalogRatioFor(it){ return (it.type === 'musique' && MUSIQUE_RATIO[it.sousCat]) || CATALOG_RATIO; }
 function ratioFor(p){ return PLATFORM_RATIO[p] || DEFAULT_RATIO; }
 function ratioNum(str){ const [w,h] = String(str).split('/').map(Number); return (w && h) ? w/h : 0.71; }
 
@@ -1257,7 +1260,7 @@ function buildCatalogTile(it){
   div.setAttribute('role','button');
   div.dataset.id = it.id;
   const sub = it.y || it.sousCat || it.dateParution || it.remarque || '—';
-  div.innerHTML = `<div class="box-art" style="--accent:var(${catAccentVar(it.cat)});aspect-ratio:${CATALOG_RATIO}">${buildCatalogArtInner(it)}</div>
+  div.innerHTML = `<div class="box-art" style="--accent:var(${catAccentVar(it.cat)});aspect-ratio:${catalogRatioFor(it)}">${buildCatalogArtInner(it)}</div>
     <div class="box-label"><div class="box-title">${escapeHtml(it.n)}</div><div class="box-year">${escapeHtml(sub)}</div></div>`;
   div.addEventListener('click', ()=>openCatalogCard(it.id));
   div.addEventListener('keydown', e=>{ if(e.key==='Enter'||e.key===' '){ e.preventDefault(); openCatalogCard(it.id); } });
@@ -1582,6 +1585,7 @@ function renderCatalogCard(it, editMode){
   cardEl.style.setProperty('--accent', `var(${catAccentVar(it.cat)})`);
   const isNewEntry = !it.id;
   const idNum = it.id ? it.id.replace(/[^0-9]/g,'').slice(-4).padStart(4,'0') : '????';
+  const itemRatio = catalogRatioFor(it);
 
   const usesSubcat = TYPES_WITH_SUBCAT.includes(it.type);
   let fieldsHtml = '';
@@ -1611,7 +1615,7 @@ function renderCatalogCard(it, editMode){
 
   cardEl.innerHTML = `
     <div class="card-stamp">N° ${idNum}</div>
-    <div class="card-preview ${previewClass}" id="cardPreview" style="aspect-ratio:${CATALOG_RATIO};max-width:${Math.round(ratioNum(CATALOG_RATIO)*260)}px;margin-left:auto;margin-right:auto;">${previewInner}${previewHintHtml}${previewRemoveHtml}${previewCameraHtml}</div>
+    <div class="card-preview ${previewClass}" id="cardPreview" style="aspect-ratio:${itemRatio};max-width:${Math.round(ratioNum(itemRatio)*260)}px;margin-left:auto;margin-right:auto;">${previewInner}${previewHintHtml}${previewRemoveHtml}${previewCameraHtml}</div>
     ${editMode ? '<input type="file" id="f_photofile" accept="image/*" class="sr-only"><input type="file" id="f_photocamera" accept="image/*" capture="environment" class="sr-only">' : ''}
     <h2 class="card-title" id="cardTitle">${editMode ? '' : escapeHtml(it.n)}</h2>
     <div class="card-sub">${escapeHtml(TYPE_LABELS[it.type]||'')}${isNewEntry ? ' · Nouvelle fiche' : (it.id && it.id.startsWith('x') ? ' · Ajout personnel' : '')}</div>
