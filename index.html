@@ -1075,6 +1075,20 @@ document.getElementById('logoutBtn').addEventListener('click', ()=>auth.signOut(
 function sortWithin(list){
   return list.slice().sort((a,b)=> collator(a.n,b.n));
 }
+// Musique : classement alphabétique par artiste, puis par année au sein d'un même artiste
+// (les OST, sans artiste renseigné, se classent par leur propre titre).
+function musicCompare(a, b){
+  const keyA = a.artiste || a.n || '', keyB = b.artiste || b.n || '';
+  const artCmp = collator(keyA, keyB);
+  if(artCmp !== 0) return artCmp;
+  const yA = parseInt(a.y, 10) || 0, yB = parseInt(b.y, 10) || 0;
+  if(yA !== yB) return yA - yB;
+  return collator(a.n, b.n);
+}
+function sortCatalogList(list){
+  if(list.length && list[0].type === 'musique') return list.slice().sort(musicCompare);
+  return sortWithin(list);
+}
 // Numéro affiché sur la fiche (tampon rouge) : position alphabétique de l'objet dans la liste
 // complète "Tout afficher" de sa section — fixe, indépendante du bouton/filtre actuellement actif.
 function gameAlphaPosition(id){
@@ -1082,7 +1096,7 @@ function gameAlphaPosition(id){
   return idx >= 0 ? idx+1 : null;
 }
 function catalogAlphaPosition(id){
-  const idx = sortWithin(catalogItemsForSection()).findIndex(it=>it.id===id);
+  const idx = sortCatalogList(catalogItemsForSection()).findIndex(it=>it.id===id);
   return idx >= 0 ? idx+1 : null;
 }
 // Ordre de consoles personnalisé par constructeur (remplace le tri chronologique par défaut)
@@ -1375,7 +1389,7 @@ function renderCatalogShelf(){
   }
   const grid = document.createElement('div');
   grid.className = 'console-grid flat-grid';
-  filtered.slice().sort((a,b)=>collator(a.n,b.n)).forEach(it=>grid.appendChild(buildCatalogTile(it)));
+  sortCatalogList(filtered).forEach(it=>grid.appendChild(buildCatalogTile(it)));
   shelf.appendChild(grid);
 }
 
