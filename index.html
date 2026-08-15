@@ -1356,7 +1356,7 @@ function buildCatalogTile(it){
   div.setAttribute('role','button');
   div.dataset.id = it.id;
   const namedByMusic = isMusicNamed(it.type, it.sousCat);
-  const title = namedByMusic ? (it.artiste || '—') : it.n;
+  const title = it.n;
   const sub = namedByMusic ? (it.album || '—') : (it.y || it.sousCat || it.dateParution || it.remarque || '—');
   div.innerHTML = `<div class="box-art" style="--accent:var(${catAccentVar(it.cat)});aspect-ratio:${catalogRatioFor(it)}">${buildCatalogArtInner(it)}</div>
     <div class="box-label"><div class="box-title">${escapeHtml(title)}</div><div class="box-year">${escapeHtml(sub)}</div></div>`;
