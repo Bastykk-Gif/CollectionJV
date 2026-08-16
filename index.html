@@ -1572,8 +1572,25 @@ function renderVenteShelf(){
   SECTION_DEFS.filter(s=>s.type).forEach(s=>{
     const items = byType[s.type];
     if(!items || !items.length) return;
-    const tiles = sortCatalogList(items).map(it=>buildCatalogTile(it));
-    shelf.appendChild(buildGroupSection('vente-'+s.type, s.label, 'Catalogue', items.length, 'var(--brass)', tiles));
+    if(TYPES_WITH_SUBCAT.includes(s.type)){
+      // Types à sous-catégorie (Musique, Produits dérivés) : un bloc par sous-catégorie,
+      // ex. "Musique / K7", "Musique / CD"…
+      const bySub = {};
+      items.forEach(it=>{ const sc = it.sousCat || ''; (bySub[sc] = bySub[sc] || []).push(it); });
+      const known = subcatOptionsFor(s.type) || [];
+      const orderedSubs = known.filter(sc=>bySub[sc]);
+      const extraSubs = Object.keys(bySub).filter(sc=>sc && !known.includes(sc)).sort(collator);
+      const blankSub = bySub[''] ? [''] : [];
+      [...orderedSubs, ...extraSubs, ...blankSub].forEach(sc=>{
+        const subItems = bySub[sc];
+        const tiles = sortCatalogList(subItems).map(it=>buildCatalogTile(it));
+        const label = sc ? `${s.label} / ${sc}` : s.label;
+        shelf.appendChild(buildGroupSection('vente-'+s.type+'-'+slug(sc||'sans-sous-categorie'), label, 'Catalogue', subItems.length, 'var(--brass)', tiles));
+      });
+    } else {
+      const tiles = sortCatalogList(items).map(it=>buildCatalogTile(it));
+      shelf.appendChild(buildGroupSection('vente-'+s.type, s.label, 'Catalogue', items.length, 'var(--brass)', tiles));
+    }
   });
 }
 
