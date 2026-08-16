@@ -433,16 +433,17 @@ const SECTION_DEFS = [
 const SECTION_BY_KEY = {}; SECTION_DEFS.forEach(s=>SECTION_BY_KEY[s.key]=s);
 const DERIVE_SUBCATS = ['Accessoires','Amiibo','Figurines','Jouets','Livres','Magazines','Peluches','PLV',"Son & Image"];
 const MUSIQUE_SUBCATS = ['K7','CD','Vinyles'];
-const TYPES_WITH_SUBCAT = ['derive','musique'];
-// Sous-catégories ajoutées depuis l'interface (en plus des listes de base ci-dessus),
-// chargées depuis meta/subcats et tenues à jour en temps réel — voir subscribeSubcats().
+const TYPES_WITH_SUBCAT = ['derive','musique','systeme'];
+// Sous-catégories par type, chargées depuis meta/subcats et tenues à jour en temps réel —
+// voir subscribeSubcats(). Pour Produits dérivés/Musique, les listes ci-dessus ne servent
+// qu'à amorcer Firestore une seule fois (ensureCatalogMigrationV5) : ensuite tout — y compris
+// ces valeurs de départ — vit dans Firestore et se supprime/trie exactement de la même façon,
+// qu'elle ait été créée à l'origine ou ajoutée depuis le menu. Systèmes de jeux démarre vide :
+// plus de catégories constructeur imposées, seulement celles qu'on crée soi-même.
 let customSubcats = {};
-function baseSubcatsFor(type){ return type === 'derive' ? DERIVE_SUBCATS : type === 'musique' ? MUSIQUE_SUBCATS : null; }
 function subcatOptionsFor(type){
-  const base = baseSubcatsFor(type);
-  if(!base) return null;
-  const extra = (customSubcats[type] || []).filter(s=>!base.includes(s)).sort(collator);
-  return extra.length ? base.concat(extra) : base;
+  if(!TYPES_WITH_SUBCAT.includes(type)) return null;
+  return (customSubcats[type] || []).slice().sort(collator);
 }
 // K7/CD/Vinyles : pas de champ "Nom" saisi à la main, le titre de la fiche est dérivé de Artiste + Album.
 function isMusicNamed(type, sousCat){ return type === 'musique' && (sousCat === 'K7' || sousCat === 'CD' || sousCat === 'Vinyles'); }
@@ -1007,6 +1008,31 @@ async function ensureCatalogMigrationV4(meta){
   await metaDoc.set({ catalogMigrationV4:true, catalogMigrationV4At: firebase.firestore.FieldValue.serverTimestamp() }, {merge:true});
 }
 
+async function ensureCatalogMigrationV5(meta){
+  if(meta.catalogMigrationV5) return;
+
+  // Les sous-catégories de base (Produits dérivés / Musique) rejoignent meta/subcats : elles
+  // deviennent des entrées Firestore comme les autres, donc supprimables/triables de la même
+  // façon que celles créées depuis le menu (au lieu d'une liste figée dans le code).
+  await db.collection('meta').doc('subcats').set({
+    derive: firebase.firestore.FieldValue.arrayUnion(...DERIVE_SUBCATS),
+    musique: firebase.firestore.FieldValue.arrayUnion(...MUSIQUE_SUBCATS),
+  }, {merge:true});
+
+  // Systèmes de jeux perd son regroupement par constructeur (Nintendo/Sony/…) au profit de
+  // sous-catégories libres : la couleur liée à l'ancien constructeur n'a plus lieu d'être.
+  {
+    const snap = await catalogCol.where('type','==','systeme').get();
+    for(const chunk of chunkArray(snap.docs, 400)){
+      const batch = db.batch();
+      chunk.forEach(d=>batch.update(d.ref, {cat:''}));
+      await batch.commit();
+    }
+  }
+
+  await metaDoc.set({ catalogMigrationV5:true, catalogMigrationV5At: firebase.firestore.FieldValue.serverTimestamp() }, {merge:true});
+}
+
 function subscribeCatalog(){
   catalogCol.onSnapshot(snap=>{
     allCatalog = snap.docs.map(d=>Object.assign({id:d.id}, d.data()));
@@ -1060,6 +1086,7 @@ async function init(){
       await ensureCatalogMigrationV2(meta);
       await ensureCatalogMigrationV3(meta);
       await ensureCatalogMigrationV4(meta);
+      await ensureCatalogMigrationV5(meta);
     }
   }catch(err){
     console.error(err);
@@ -1400,11 +1427,9 @@ function renderCatalogNav(){
   const usesSubcat = TYPES_WITH_SUBCAT.includes(sectionType);
   let html = `<a href="#" class="nav-all ${state.mode==='all'?'active':''}" data-mode="all">Tout afficher</a>`;
   if(usesSubcat){
-    const baseSubcats = baseSubcatsFor(sectionType);
     subcatOptionsFor(sectionType).forEach(sc=>{
       const active = (state.mode==='subcat' && state.value===sc) ? 'active' : '';
-      const isCustom = !baseSubcats.includes(sc);
-      const delHtml = (isCustom && !isReadOnly()) ? `<button type="button" class="nav-subcat-del" data-subcat="${escapeAttr(sc)}" aria-label="Supprimer la sous-catégorie ${escapeHtml(sc)}" title="Supprimer cette sous-catégorie">×</button>` : '';
+      const delHtml = !isReadOnly() ? `<button type="button" class="nav-subcat-del" data-subcat="${escapeAttr(sc)}" aria-label="Supprimer la sous-catégorie ${escapeHtml(sc)}" title="Supprimer cette sous-catégorie">×</button>` : '';
       html += `<div class="nav-fam-row"><a href="#" class="nav-fam-link ${active}" data-mode="subcat" data-value="${escapeAttr(sc)}" style="flex:1;">${escapeHtml(sc)}</a>${delHtml}</div>`;
     });
     if(!isReadOnly()){
@@ -1704,7 +1729,7 @@ function openCatalogCard(id, isNew=false, forcedType=null){
   if(isNew){
     const def = SECTION_BY_KEY[state.section];
     const type = forcedType || def.type || 'console';
-    const usesSubcat = type === 'derive' || type === 'musique';
+    const usesSubcat = TYPES_WITH_SUBCAT.includes(type);
     const defaultCat = (!forcedType && state.mode === 'family') ? state.value : '';
     const defaultSousCat = (!forcedType && usesSubcat && state.mode === 'subcat') ? state.value : '';
     it = {id:null, type, n:'', cat:defaultCat, sousCat:defaultSousCat, y:'', pays:'', remarque:'', consoleLiee:'', jeuLie:'', fabricant:'', numero:'', dateParution:'', artiste:'', album:'', img:'', vente:false, prix:''};
