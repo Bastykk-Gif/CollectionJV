@@ -181,6 +181,7 @@ a{color:inherit;}
 .card-title{font-family:'Inter',sans-serif; font-weight:800; font-size:1.5rem; line-height:1.18; margin:2px 38px 4px 0; word-break:break-word;}
 .card-sub{font-family:'Inter',sans-serif; font-weight:600; font-size:.76rem; text-transform:uppercase; letter-spacing:.06em; color:var(--ink-soft); margin-bottom:14px;}
 .sale-banner{background:var(--stamp); color:#fff; font-family:'Inter',sans-serif; font-weight:700; font-size:.85rem; text-align:center; padding:9px 12px; border-radius:6px; margin:-6px 0 14px; letter-spacing:.02em;}
+.sale-price-burst{position:absolute; top:6px; right:6px; z-index:3; width:54px; height:54px; background:#E4231C; color:#fff; display:flex; align-items:center; justify-content:center; text-align:center; font-family:'Inter',sans-serif; font-weight:800; font-size:.74rem; line-height:1.05; padding:2px; transform:rotate(-9deg); box-shadow:0 2px 6px rgba(0,0,0,.4); clip-path:polygon(50% 0%,61% 15%,78% 6%,78% 25%,96% 19%,89% 37%,100% 50%,89% 63%,96% 81%,78% 75%,78% 94%,61% 85%,50% 100%,39% 85%,22% 94%,22% 75%,4% 81%,11% 63%,0% 50%,11% 37%,4% 19%,22% 25%,22% 6%,39% 15%);}
 .field-vente dd{text-align:right;}
 .field-vente .vente-checkbox{width:20px; height:20px; accent-color:var(--stamp); cursor:pointer; vertical-align:middle;}
 .fields{margin:0; border-top:1px dashed rgba(42,33,24,.3);}
@@ -1248,8 +1249,14 @@ function buildArtInner(g){
   if(g.img) return `<img src="${escapeAttr(g.img)}" alt="" loading="lazy" onerror="this.remove(); this.parentElement.insertAdjacentHTML('beforeend', '<span class=box-plat-tag>${escapeHtml(g.p)}</span>');">`;
   return `<span class="box-plat-tag">${escapeHtml(g.p)}</span>`;
 }
+// Ajoute le symbole € au prix saisi si l'utilisateur ne l'a pas déjà tapé.
+function formatPrice(prix){
+  const s = (prix||'').trim();
+  if(!s) return '';
+  return /€/.test(s) ? s : s + ' €';
+}
 function saleBadgeHtml(item){
-  return item.vente ? `<span class="sale-badge">${escapeHtml(item.prix ? item.prix : 'À vendre')}</span>` : '';
+  return item.vente ? `<span class="sale-badge">${escapeHtml(item.prix ? formatPrice(item.prix) : 'À vendre')}</span>` : '';
 }
 function buildTile(g){
   const div = document.createElement('div');
@@ -1276,6 +1283,24 @@ function buildConsoleSection(platform, family, games){
   const grid = document.createElement('div');
   grid.className = 'console-grid';
   games.forEach(g=>grid.appendChild(buildTile(g)));
+  section.appendChild(grid);
+  return section;
+}
+// Section groupée générique (réutilisée par la vue "À vendre" pour les fiches catalogue,
+// sur le même modèle visuel que buildConsoleSection).
+function buildGroupSection(id, name, sub, count, accentVar, tiles){
+  const section = document.createElement('section');
+  section.className = 'console-section';
+  section.id = id;
+  section.style.setProperty('--accent', accentVar);
+  section.innerHTML = `<div class="console-head">
+      <h2 class="console-name">${escapeHtml(name)}</h2>
+      <span class="console-fam">${escapeHtml(sub)}</span>
+      <span class="console-count">${count} fiche${count>1?'s':''}</span>
+    </div>`;
+  const grid = document.createElement('div');
+  grid.className = 'console-grid';
+  tiles.forEach(t=>grid.appendChild(t));
   section.appendChild(grid);
   return section;
 }
@@ -1529,12 +1554,27 @@ function renderVenteShelf(){
     shelf.appendChild(empty);
     return;
   }
-  const grid = document.createElement('div');
-  grid.className = 'console-grid flat-grid';
-  filtered.sort((a,b)=>collator(a.n,b.n)).forEach(it=>{
-    grid.appendChild(it.__kind==='jeu' ? buildTile(it) : buildCatalogTile(it));
+  // Pas de dropdown sur cette section, mais les fiches restent regroupées : les jeux par
+  // console (même logique que la vue famille du menu Jeux), les fiches catalogue par type.
+  const games = filtered.filter(it=>it.__kind==='jeu');
+  const cat = filtered.filter(it=>it.__kind==='cat');
+
+  const order = consoleOrder(games);
+  const byPlatform = {};
+  games.forEach(g=>{ (byPlatform[g.p] = byPlatform[g.p] || []).push(g); });
+  order.forEach(o=>{
+    if(!byPlatform[o.platform]) return;
+    shelf.appendChild(buildConsoleSection(o.platform, o.family, sortWithin(byPlatform[o.platform])));
   });
-  shelf.appendChild(grid);
+
+  const byType = {};
+  cat.forEach(it=>{ (byType[it.type] = byType[it.type] || []).push(it); });
+  SECTION_DEFS.filter(s=>s.type).forEach(s=>{
+    const items = byType[s.type];
+    if(!items || !items.length) return;
+    const tiles = sortCatalogList(items).map(it=>buildCatalogTile(it));
+    shelf.appendChild(buildGroupSection('vente-'+s.type, s.label, 'Catalogue', items.length, 'var(--brass)', tiles));
+  });
 }
 
 /* ---------- MODAL ---------- */
@@ -1702,7 +1742,8 @@ function renderCard(g, editMode){
       fieldsHtml += `<div class="field"><dt>${fd.label}</dt><dd>${escapeHtml(g[fd.key]||'—')}</dd></div>`;
     });
   }
-  const saleBannerHtml = (!editMode && g.vente) ? `<div class="sale-banner">À vendre${g.prix ? ' — '+escapeHtml(g.prix) : ''}</div>` : '';
+  const saleBannerHtml = (!editMode && g.vente) ? `<div class="sale-banner">À vendre</div>` : '';
+  const priceBurstHtml = (!editMode && g.vente && g.prix) ? `<div class="sale-price-burst">${escapeHtml(formatPrice(g.prix))}</div>` : '';
 
   const hasImg = !!g.img;
   const previewInner = hasImg ? `<img src="${escapeAttr(g.img)}" alt="" onerror="this.style.display='none';">` : `<span class="box-plat-tag">${escapeHtml(g.p||g.cat||'')}</span>`;
@@ -1715,7 +1756,7 @@ function renderCard(g, editMode){
 
   cardEl.innerHTML = `
     <div class="card-stamp">N° ${idNum}</div>
-    <div class="card-preview ${previewClass}" id="cardPreview" style="aspect-ratio:${previewRatio};max-width:${Math.round(previewNum*260)}px;margin-left:auto;margin-right:auto;">${previewInner}${previewHintHtml}${previewRemoveHtml}${previewCameraHtml}</div>
+    <div class="card-preview ${previewClass}" id="cardPreview" style="aspect-ratio:${previewRatio};max-width:${Math.round(previewNum*260)}px;margin-left:auto;margin-right:auto;">${previewInner}${previewHintHtml}${previewRemoveHtml}${previewCameraHtml}${priceBurstHtml}</div>
     ${editMode ? '<input type="file" id="f_photofile" accept="image/*" class="sr-only"><input type="file" id="f_photocamera" accept="image/*" capture="environment" class="sr-only">' : ''}
     <h2 class="card-title" id="cardTitle">${editMode ? '' : escapeHtml(g.n)}</h2>
     <div class="card-sub">${escapeHtml(g.cat)}${isNewEntry ? ' · Nouvelle fiche' : (g.id && g.id.startsWith('u') ? ' · Ajout personnel' : '')}</div>
@@ -1864,7 +1905,8 @@ function renderCatalogCard(it, editMode){
       fieldsHtml += `<div class="field"><dt>${CATALOG_FIELD_LABELS[key]}</dt><dd>${escapeHtml(it[key]||'—')}</dd></div>`;
     });
   }
-  const saleBannerHtml = (!editMode && it.vente) ? `<div class="sale-banner">À vendre${it.prix ? ' — '+escapeHtml(it.prix) : ''}</div>` : '';
+  const saleBannerHtml = (!editMode && it.vente) ? `<div class="sale-banner">À vendre</div>` : '';
+  const priceBurstHtml = (!editMode && it.vente && it.prix) ? `<div class="sale-price-burst">${escapeHtml(formatPrice(it.prix))}</div>` : '';
 
   const hasImg = !!it.img;
   const previewInner = hasImg ? `<img src="${escapeAttr(it.img)}" alt="" onerror="this.style.display='none';">` : `<span class="box-plat-tag">${escapeHtml(it.n || TYPE_LABELS[it.type] || '')}</span>`;
@@ -1875,7 +1917,7 @@ function renderCatalogCard(it, editMode){
 
   cardEl.innerHTML = `
     <div class="card-stamp">N° ${idNum}</div>
-    <div class="card-preview ${previewClass}" id="cardPreview" style="aspect-ratio:${itemRatio};max-width:${Math.round(ratioNum(itemRatio)*260)}px;margin-left:auto;margin-right:auto;">${previewInner}${previewHintHtml}${previewRemoveHtml}${previewCameraHtml}</div>
+    <div class="card-preview ${previewClass}" id="cardPreview" style="aspect-ratio:${itemRatio};max-width:${Math.round(ratioNum(itemRatio)*260)}px;margin-left:auto;margin-right:auto;">${previewInner}${previewHintHtml}${previewRemoveHtml}${previewCameraHtml}${priceBurstHtml}</div>
     ${editMode ? '<input type="file" id="f_photofile" accept="image/*" class="sr-only"><input type="file" id="f_photocamera" accept="image/*" capture="environment" class="sr-only">' : ''}
     <h2 class="card-title" id="cardTitle">${editMode ? '' : escapeHtml(it.n)}</h2>
     <div class="card-sub">${escapeHtml(TYPE_LABELS[it.type]||'')}${isNewEntry ? ' · Nouvelle fiche' : (it.id && it.id.startsWith('x') ? ' · Ajout personnel' : '')}</div>
