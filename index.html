@@ -403,6 +403,13 @@ const firebaseConfig = {
 
 firebase.initializeApp(firebaseConfig);
 const db = firebase.firestore();
+// Cache local (IndexedDB) : évite de re-télécharger tout le catalogue (photos en base64
+// comprises) à chaque chargement/rafraîchissement de la page. Une fois le cache rempli,
+// les ouvertures suivantes affichent les données instantanément puis ne synchronisent
+// que ce qui a changé depuis. synchronizeTabs permet d'ouvrir plusieurs onglets sans erreur.
+db.enablePersistence({synchronizeTabs:true}).catch(err=>{
+  console.warn('Cache local Firestore indisponible :', err.code);
+});
 const auth = firebase.auth();
 const gamesCol = db.collection('games');
 const catalogCol = db.collection('catalog');
