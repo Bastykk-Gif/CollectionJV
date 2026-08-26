@@ -1033,6 +1033,33 @@ async function ensureCatalogMigrationV5(meta){
   await metaDoc.set({ catalogMigrationV5:true, catalogMigrationV5At: firebase.firestore.FieldValue.serverTimestamp() }, {merge:true});
 }
 
+async function ensureCatalogMigrationV6(meta){
+  if(meta.catalogMigrationV6) return;
+
+  // "CD à vendre" / "K7 à vendre" avaient été créées comme sous-catégories libres depuis le
+  // menu (au lieu de cocher "À vendre" sur les fiches CD/K7 existantes) : n'étant pas
+  // reconnues par catalogFieldKeysFor, elles n'affichaient pas les champs artiste/album/année
+  // à l'écran, et le formulaire — qui renvoie toujours ces trois clés, vides quand le champ
+  // n'est pas affiché — les a écrasées à la sauvegarde. On rebascule ces fiches vers les
+  // vraies sous-catégories CD/K7 (juste le classement, sans toucher aux autres champs) ;
+  // artiste/album/année restent tels quels en base, à ressaisir à la main si perdus.
+  for(const [from, to] of [['CD à vendre','CD'], ['K7 à vendre','K7']]){
+    const snap = await catalogCol.where('type','==','musique').where('sousCat','==',from).get();
+    if(snap.docs.length){
+      for(const chunk of chunkArray(snap.docs, 400)){
+        const batch = db.batch();
+        chunk.forEach(d=>batch.update(d.ref, {sousCat: to, vente:true}));
+        await batch.commit();
+      }
+    }
+  }
+  await db.collection('meta').doc('subcats').set({
+    musique: firebase.firestore.FieldValue.arrayRemove('CD à vendre','K7 à vendre'),
+  }, {merge:true});
+
+  await metaDoc.set({ catalogMigrationV6:true, catalogMigrationV6At: firebase.firestore.FieldValue.serverTimestamp() }, {merge:true});
+}
+
 function subscribeCatalog(){
   catalogCol.onSnapshot(snap=>{
     allCatalog = snap.docs.map(d=>Object.assign({id:d.id}, d.data()));
@@ -1087,6 +1114,7 @@ async function init(){
       await ensureCatalogMigrationV3(meta);
       await ensureCatalogMigrationV4(meta);
       await ensureCatalogMigrationV5(meta);
+      await ensureCatalogMigrationV6(meta);
     }
   }catch(err){
     console.error(err);
