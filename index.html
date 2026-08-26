@@ -2358,7 +2358,8 @@ function showUndoToast(msg, onUndo){
 }
 
 document.getElementById('exportBtn').addEventListener('click', ()=>{
-  const blob = new Blob([JSON.stringify(allGames, null, 2)], {type:'application/json'});
+  const backup = {games: allGames, catalog: allCatalog};
+  const blob = new Blob([JSON.stringify(backup, null, 2)], {type:'application/json'});
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   const d = new Date();
