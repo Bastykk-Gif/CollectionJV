@@ -473,7 +473,23 @@ let allGames = [];
 let allCatalog = [];
 const state = { section:'jeux', q:'', mode:'all', value:null };
 
-function collator(a,b){ return (a||'').localeCompare(b||'', 'fr', {sensitivity:'base'}); }
+// Isole un numéro de suite isolé (ex : "... 3 OST...", "... 2: ...") du reste du titre, pour
+// que "Titre" (implicitement le 1) se classe avant "Titre 2", "Titre 3", etc. — sans quoi un
+// titre non numéroté peut finir après ses suites (une lettre valant plus qu'un chiffre).
+function numberedTitleParts(str){
+  const s = str || '';
+  const m = s.match(/(^|\s)(\d+)(?=\s|:|$)/);
+  if(!m) return {base:s, num:1};
+  const base = (s.slice(0, m.index+m[1].length) + s.slice(m.index+m[0].length)).replace(/\s{2,}/g,' ').trim();
+  return {base, num:parseInt(m[2],10)};
+}
+function collator(a,b){
+  const pa = numberedTitleParts(a||''), pb = numberedTitleParts(b||'');
+  const baseCmp = pa.base.localeCompare(pb.base, 'fr', {sensitivity:'base'});
+  if(baseCmp !== 0) return baseCmp;
+  if(pa.num !== pb.num) return pa.num - pb.num;
+  return (a||'').localeCompare(b||'', 'fr', {sensitivity:'base'});
+}
 function distinctValues(key){
   const set = new Set();
   allGames.forEach(g=>{ const v = (g[key]||'').trim(); if(v) set.add(v); });
