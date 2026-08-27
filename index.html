@@ -88,6 +88,7 @@ a{color:inherit;}
 .nav-all:hover{background:rgba(176,141,87,.1);}
 .nav-all.active{background:rgba(176,141,87,.18); border-left-color:var(--brass);}
 .nav-search-note{padding:10px 18px; color:var(--muted); font-family:'Inter',sans-serif; font-size:.82rem;}
+.nav-count{float:right; opacity:.6; font-weight:400; font-variant-numeric:tabular-nums; margin-left:8px;}
 .nav-family{margin-bottom:6px;}
 .nav-fam-row{display:flex; align-items:stretch;}
 .nav-fam-link{flex:1; display:block; padding:9px 18px; font-family:'Inter',sans-serif; font-weight:700; font-size:.85rem; text-transform:uppercase; letter-spacing:.03em; color:var(--card); text-decoration:none; border-left:4px solid transparent; cursor:pointer;}
@@ -1261,21 +1262,23 @@ function renderTicker(total){
 }
 function renderNavMenu(list){
   const nav = document.getElementById('navMenu');
-  let html = `<a href="#" class="nav-all ${state.mode==='all'?'active':''}" data-mode="all">Tout afficher</a>`;
+  let html = `<a href="#" class="nav-all ${state.mode==='all'?'active':''}" data-mode="all">Tout afficher<span class="nav-count">${list.length}</span></a>`;
   CATS.forEach(fam=>{
     const color = CAT_HEX[fam] || '#333';
-    const famPlats = consoleOrder(list.filter(g=>g.cat===fam)).map(o=>o.platform);
+    const famList = list.filter(g=>g.cat===fam);
+    const famPlats = consoleOrder(famList).map(o=>o.platform);
     const famActive = (state.mode==='family' && state.value===fam) ? 'active' : '';
     const expanded = !collapsedFamilies.has(fam);
     html += `<div class="nav-family">
       <div class="nav-fam-row">
-        <a href="#" class="nav-fam-link ${famActive}" data-mode="family" data-value="${escapeAttr(fam)}" style="border-left-color:${color};">${escapeHtml(fam)}</a>
+        <a href="#" class="nav-fam-link ${famActive}" data-mode="family" data-value="${escapeAttr(fam)}" style="border-left-color:${color};">${escapeHtml(fam)}<span class="nav-count">${famList.length}</span></a>
         <button type="button" class="nav-fam-toggle ${expanded?'expanded':''}" data-fam="${escapeAttr(fam)}" aria-label="Afficher/masquer les consoles ${escapeHtml(fam)}" aria-expanded="${expanded}">›</button>
       </div>
       <div class="nav-consoles ${expanded?'':'collapsed'}">
         ${famPlats.map(p=>{
           const platActive = (state.mode==='platform' && state.value===p) ? 'active' : '';
-          return `<a href="#" class="nav-plat-link ${platActive}" data-mode="platform" data-value="${escapeAttr(p)}" data-fam="${escapeAttr(fam)}" style="border-left-color:${color};">${escapeHtml(p)}</a>`;
+          const platCount = famList.filter(g=>g.p===p).length;
+          return `<a href="#" class="nav-plat-link ${platActive}" data-mode="platform" data-value="${escapeAttr(p)}" data-fam="${escapeAttr(fam)}" style="border-left-color:${color};">${escapeHtml(p)}<span class="nav-count">${platCount}</span></a>`;
         }).join('')}
       </div>
     </div>`;
@@ -1450,12 +1453,14 @@ function renderCatalogNav(){
   const nav = document.getElementById('navMenu');
   const sectionType = SECTION_BY_KEY[state.section].type;
   const usesSubcat = TYPES_WITH_SUBCAT.includes(sectionType);
-  let html = `<a href="#" class="nav-all ${state.mode==='all'?'active':''}" data-mode="all">Tout afficher</a>`;
+  const items = catalogItemsForSection();
+  let html = `<a href="#" class="nav-all ${state.mode==='all'?'active':''}" data-mode="all">Tout afficher<span class="nav-count">${items.length}</span></a>`;
   if(usesSubcat){
     subcatOptionsFor(sectionType).forEach(sc=>{
       const active = (state.mode==='subcat' && state.value===sc) ? 'active' : '';
+      const count = items.filter(it=>it.sousCat===sc).length;
       const delHtml = !isReadOnly() ? `<button type="button" class="nav-subcat-del" data-subcat="${escapeAttr(sc)}" aria-label="Supprimer la sous-catégorie ${escapeHtml(sc)}" title="Supprimer cette sous-catégorie">×</button>` : '';
-      html += `<div class="nav-fam-row"><a href="#" class="nav-fam-link ${active}" data-mode="subcat" data-value="${escapeAttr(sc)}" style="flex:1;">${escapeHtml(sc)}</a>${delHtml}</div>`;
+      html += `<div class="nav-fam-row"><a href="#" class="nav-fam-link ${active}" data-mode="subcat" data-value="${escapeAttr(sc)}" style="flex:1;">${escapeHtml(sc)}<span class="nav-count">${count}</span></a>${delHtml}</div>`;
     });
     if(!isReadOnly()){
       html += `<div class="nav-subcat-add">
@@ -1470,9 +1475,10 @@ function renderCatalogNav(){
       </div>`;
     }
   } else {
-    catalogFamilyList(catalogItemsForSection()).forEach(cat=>{
+    catalogFamilyList(items).forEach(cat=>{
       const active = (state.mode==='family' && state.value===cat) ? 'active' : '';
-      html += `<a href="#" class="nav-fam-link ${active}" data-mode="family" data-value="${escapeAttr(cat)}" style="border-left-color:${catHexOrWhite(cat)};">${escapeHtml(cat || 'Non affilié')}</a>`;
+      const count = items.filter(it=>(it.cat||'')===cat).length;
+      html += `<a href="#" class="nav-fam-link ${active}" data-mode="family" data-value="${escapeAttr(cat)}" style="border-left-color:${catHexOrWhite(cat)};">${escapeHtml(cat || 'Non affilié')}<span class="nav-count">${count}</span></a>`;
     });
   }
   nav.innerHTML = html;
@@ -1587,7 +1593,7 @@ function saleItems(){
 // les catégories ajoutées dessous, une fois les fiches "à vendre" connues).
 function renderVenteNav(){
   state.mode = 'all'; state.value = null;
-  document.getElementById('navMenu').innerHTML = `<a href="#" class="nav-all active" data-mode="all">Tout afficher</a>`;
+  document.getElementById('navMenu').innerHTML = `<a href="#" class="nav-all active" data-mode="all">Tout afficher<span class="nav-count">${saleItems().length}</span></a>`;
 }
 // Ajoute sous "Tout afficher" un lien par catégorie réellement présente (celles créées par
 // renderMixedGroups) : ce sont de simples ancres qui font défiler jusqu'au bloc correspondant,
@@ -1595,7 +1601,7 @@ function renderVenteNav(){
 function renderVenteNavCategories(entries){
   if(!entries.length) return;
   const nav = document.getElementById('navMenu');
-  const html = entries.map(e=>`<a href="#" class="nav-fam-link" data-scroll="${escapeAttr(e.id)}" style="border-left-color:${e.accent};">${escapeHtml(e.label)}</a>`).join('');
+  const html = entries.map(e=>`<a href="#" class="nav-fam-link" data-scroll="${escapeAttr(e.id)}" style="border-left-color:${e.accent};">${escapeHtml(e.label)}<span class="nav-count">${e.count}</span></a>`).join('');
   nav.insertAdjacentHTML('beforeend', html);
   nav.querySelectorAll('a[data-scroll]').forEach(a=>{
     a.addEventListener('click', e=>{
@@ -1618,7 +1624,7 @@ function renderMixedGroups(shelf, games, cat, idPrefix){
     if(!byPlatform[o.platform]) return;
     const id = 'console-'+slug(o.platform);
     shelf.appendChild(buildConsoleSection(o.platform, o.family, sortWithin(byPlatform[o.platform])));
-    navEntries.push({id, label:o.platform, accent:`var(${CAT_VAR[o.family]||'--brass'})`});
+    navEntries.push({id, label:o.platform, accent:`var(${CAT_VAR[o.family]||'--brass'})`, count:byPlatform[o.platform].length});
   });
 
   const byType = {};
@@ -1641,13 +1647,13 @@ function renderMixedGroups(shelf, games, cat, idPrefix){
         const label = sc ? `${s.label} / ${sc}` : s.label;
         const id = idPrefix+'-'+s.type+'-'+slug(sc||'sans-sous-categorie');
         shelf.appendChild(buildGroupSection(id, label, 'Catalogue', subItems.length, 'var(--brass)', tiles));
-        navEntries.push({id, label, accent:'var(--brass)'});
+        navEntries.push({id, label, accent:'var(--brass)', count:subItems.length});
       });
     } else {
       const tiles = sortCatalogList(items).map(it=>buildCatalogTile(it));
       const id = idPrefix+'-'+s.type;
       shelf.appendChild(buildGroupSection(id, s.label, 'Catalogue', items.length, 'var(--brass)', tiles));
-      navEntries.push({id, label:s.label, accent:'var(--brass)'});
+      navEntries.push({id, label:s.label, accent:'var(--brass)', count:items.length});
     }
   });
   return navEntries;
