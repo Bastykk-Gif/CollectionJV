@@ -213,6 +213,7 @@ a{color:inherit;}
 .crop-stage canvas{display:block; max-width:100%; max-height:70vh; width:auto; height:auto; border-radius:4px;}
 .crop-stage svg{position:absolute; inset:0; width:100%; height:100%;}
 .crop-quad{fill:rgba(176,141,87,.18); stroke:var(--brass-light); stroke-width:2; vector-effect:non-scaling-stroke;}
+.crop-edge{stroke:transparent; fill:none; pointer-events:stroke; cursor:move; touch-action:none;}
 .crop-handle{fill:var(--brass-light); stroke:#1b140d; stroke-width:2; vector-effect:non-scaling-stroke; cursor:grab; touch-action:none;}
 .crop-handle:active{cursor:grabbing; fill:#fff;}
 .crop-hint{color:var(--muted); font-family:'Inter',sans-serif; font-size:.82rem; text-align:center; max-width:480px;}
@@ -358,7 +359,7 @@ a{color:inherit;}
     <canvas id="cropCanvas"></canvas>
     <svg id="cropSvg"></svg>
   </div>
-  <p class="crop-hint">Faites glisser les 4 points sur les coins de la zone à garder : la photo sera redressée et découpée.</p>
+  <p class="crop-hint">Faites glisser les 4 points sur les coins de la zone à garder (ou une arête pour déplacer les deux points voisins ensemble) : la photo sera redressée et découpée.</p>
   <div class="crop-actions">
     <button type="button" id="cropCancelBtn">Annuler</button>
     <button type="button" id="cropConfirmBtn" class="primary">Valider</button>
@@ -628,6 +629,9 @@ let cropWorkingCanvas = null;
 let cropPoints = null; // [[x,y] x4] dans l'espace pixel de cropWorkingCanvas, ordre TL,TR,BR,BL
 let cropOnConfirm = null;
 let cropDragIndex = -1;
+const CROP_EDGE_PAIRS = [[0,1],[1,2],[2,3],[3,0]]; // haut, droite, bas, gauche
+let cropDragEdgeIdx = -1;
+let cropEdgeDragStart = null; // {pointer:[x,y], a:[x,y], b:[x,y]} aux positions de départ du glisser
 
 function svgPointFromEvent(evt){
   const pt = cropSvgEl.createSVGPoint();
@@ -643,8 +647,12 @@ function cropHandleRadius(){
 function buildCropSvg(){
   const quadPath = cropPoints.map(p=>p.join(',')).join(' ');
   const r = cropHandleRadius();
+  const edges = CROP_EDGE_PAIRS.map(([a,b],idx)=>{
+    const [x1,y1] = cropPoints[a], [x2,y2] = cropPoints[b];
+    return `<line class="crop-edge" data-idx="${idx}" data-a="${a}" data-b="${b}" x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke-width="${r*1.6}"></line>`;
+  }).join('');
   const handles = cropPoints.map((p,i)=>`<circle class="crop-handle" data-i="${i}" cx="${p[0]}" cy="${p[1]}" r="${r}"></circle>`).join('');
-  cropSvgEl.innerHTML = `<polygon class="crop-quad" points="${quadPath}"></polygon>${handles}`;
+  cropSvgEl.innerHTML = `<polygon class="crop-quad" points="${quadPath}"></polygon>${edges}${handles}`;
   cropSvgEl.querySelectorAll('.crop-handle').forEach(c=>{
     const i = Number(c.dataset.i);
     c.addEventListener('pointerdown', e=>{
@@ -665,10 +673,41 @@ function buildCropSvg(){
     c.addEventListener('pointerup', ()=>{ cropDragIndex = -1; cropMagnifierEl.hidden = true; });
     c.addEventListener('pointercancel', ()=>{ cropDragIndex = -1; cropMagnifierEl.hidden = true; });
   });
+  // Glisser une arête translate ses deux points d'extrémité ensemble (même écart en x/y
+  // pour les deux, borné pour qu'aucun des deux ne sorte du cadre).
+  cropSvgEl.querySelectorAll('.crop-edge').forEach(line=>{
+    const idx = Number(line.dataset.idx), a = Number(line.dataset.a), b = Number(line.dataset.b);
+    line.addEventListener('pointerdown', e=>{
+      e.preventDefault();
+      cropDragEdgeIdx = idx;
+      const p = svgPointFromEvent(e);
+      cropEdgeDragStart = { pointer:[p.x,p.y], a:cropPoints[a].slice(), b:cropPoints[b].slice() };
+      line.setPointerCapture(e.pointerId);
+    });
+    line.addEventListener('pointermove', e=>{
+      if(cropDragEdgeIdx !== idx) return;
+      e.preventDefault();
+      const w = cropWorkingCanvas.width, h = cropWorkingCanvas.height;
+      const p = svgPointFromEvent(e);
+      const { pointer, a:startA, b:startB } = cropEdgeDragStart;
+      let dx = p.x - pointer[0], dy = p.y - pointer[1];
+      dx = Math.min(Math.max(dx, Math.max(-startA[0],-startB[0])), Math.min(w-startA[0], w-startB[0]));
+      dy = Math.min(Math.max(dy, Math.max(-startA[1],-startB[1])), Math.min(h-startA[1], h-startB[1]));
+      cropPoints[a] = [startA[0]+dx, startA[1]+dy];
+      cropPoints[b] = [startB[0]+dx, startB[1]+dy];
+      updateCropSvg();
+    });
+    line.addEventListener('pointerup', ()=>{ cropDragEdgeIdx = -1; cropEdgeDragStart = null; });
+    line.addEventListener('pointercancel', ()=>{ cropDragEdgeIdx = -1; cropEdgeDragStart = null; });
+  });
 }
 // Ne fait que déplacer les points existants (pas de recréation DOM) pendant le glisser.
 function updateCropSvg(){
   cropSvgEl.querySelector('.crop-quad').setAttribute('points', cropPoints.map(p=>p.join(',')).join(' '));
+  cropSvgEl.querySelectorAll('.crop-edge').forEach(line=>{
+    const [x1,y1] = cropPoints[Number(line.dataset.a)], [x2,y2] = cropPoints[Number(line.dataset.b)];
+    line.setAttribute('x1',x1); line.setAttribute('y1',y1); line.setAttribute('x2',x2); line.setAttribute('y2',y2);
+  });
   cropSvgEl.querySelectorAll('.crop-handle').forEach(c=>{
     const p = cropPoints[Number(c.dataset.i)];
     c.setAttribute('cx', p[0]); c.setAttribute('cy', p[1]);
