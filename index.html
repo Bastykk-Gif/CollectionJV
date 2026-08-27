@@ -476,25 +476,38 @@ let allGames = [];
 let allCatalog = [];
 const state = { section:'jeux', q:'', mode:'all', value:null };
 
-// Isole un numéro de suite isolé (ex : "... 3 OST...", "... 2: ...") du reste du titre, pour
-// que "Titre" (implicitement le 1) se classe avant "Titre 2", "Titre 3", etc. — sans quoi un
-// titre non numéroté peut finir après ses suites (une lettre valant plus qu'un chiffre).
+// Isole le numéro de suite d'un titre (ex : "Toy-Con 02 : Kit Robot", "... 3 OST...") pour le
+// comparer numériquement plutôt que caractère par caractère : sinon "1" (non complété par un
+// zéro) se classe après "02"/"03" (le caractère '1' vaut plus que '0'), et un titre sans numéro
+// du tout finit après ses suites numérotées (une lettre vaut plus qu'un chiffre).
+function normalizedTitleText(s){
+  return (s||'').toLowerCase().replace(/:/g,' ').replace(/\s+/g,' ').trim();
+}
 function numberedTitleParts(str){
   const s = str || '';
   const m = s.match(/(^|\s)(\d+)(?=\s|:|$)/);
-  const raw = m ? (s.slice(0, m.index+m[1].length) + s.slice(m.index+m[0].length)) : s;
-  // Les deux-points ne suivent parfois que les entrées numérotées (ex : "Titre 2 : Sous-titre"
-  // contre "Titre Sous-titre" pour l'entrée 1 non numérotée) : on les ignore pour que le reste
-  // du titre reste comparable une fois le numéro retiré.
-  const base = raw.replace(/:/g, ' ').replace(/\s{2,}/g,' ').trim();
-  return {base, num: m ? parseInt(m[2],10) : 1};
+  if(!m) return {prefix:normalizedTitleText(s), num:null};
+  return {prefix:normalizedTitleText(s.slice(0, m.index)), num:parseInt(m[2],10)};
+}
+// Renvoie un delta de tri si les deux titres appartiennent à la même suite numérotée
+// (même préfixe avant le numéro), sinon null pour laisser la comparaison alphabétique décider.
+function numberedTitleDelta(pa, pb, b){
+  if(pa.num !== null && pb.num !== null && pa.prefix && pa.prefix === pb.prefix){
+    return pa.num !== pb.num ? pa.num - pb.num : null;
+  }
+  if(pa.num !== null && pb.num === null && pa.prefix && normalizedTitleText(b).startsWith(pa.prefix)){
+    return pa.num !== 1 ? pa.num - 1 : null; // b, sans numéro, vaut implicitement 1
+  }
+  return null;
 }
 function collator(a,b){
+  const raw = ()=> (a||'').localeCompare(b||'', 'fr', {sensitivity:'base'});
   const pa = numberedTitleParts(a||''), pb = numberedTitleParts(b||'');
-  const baseCmp = pa.base.localeCompare(pb.base, 'fr', {sensitivity:'base'});
-  if(baseCmp !== 0) return baseCmp;
-  if(pa.num !== pb.num) return pa.num - pb.num;
-  return (a||'').localeCompare(b||'', 'fr', {sensitivity:'base'});
+  const d1 = numberedTitleDelta(pa, pb, b);
+  if(d1 !== null) return d1;
+  const d2 = numberedTitleDelta(pb, pa, a);
+  if(d2 !== null) return -d2;
+  return raw();
 }
 function distinctValues(key){
   const set = new Set();
