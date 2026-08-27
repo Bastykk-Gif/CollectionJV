@@ -1583,21 +1583,42 @@ function saleItems(){
   const cat = allCatalog.filter(it=>it.vente).map(it=>Object.assign({}, it, {__kind:'cat'}));
   return games.concat(cat);
 }
-// Pas de menu déroulant sur cette section : uniquement "Tout afficher", en mode galerie.
+// Pas de dropdown sur cette section : uniquement "Tout afficher" (voir renderVenteShelf pour
+// les catégories ajoutées dessous, une fois les fiches "à vendre" connues).
 function renderVenteNav(){
   state.mode = 'all'; state.value = null;
   document.getElementById('navMenu').innerHTML = `<a href="#" class="nav-all active" data-mode="all">Tout afficher</a>`;
 }
+// Ajoute sous "Tout afficher" un lien par catégorie réellement présente (celles créées par
+// renderMixedGroups) : ce sont de simples ancres qui font défiler jusqu'au bloc correspondant,
+// la liste affichée reste toujours complète (pas de filtrage, contrairement au menu Jeux/Catalogue).
+function renderVenteNavCategories(entries){
+  if(!entries.length) return;
+  const nav = document.getElementById('navMenu');
+  const html = entries.map(e=>`<a href="#" class="nav-fam-link" data-scroll="${escapeAttr(e.id)}" style="border-left-color:${e.accent};">${escapeHtml(e.label)}</a>`).join('');
+  nav.insertAdjacentHTML('beforeend', html);
+  nav.querySelectorAll('a[data-scroll]').forEach(a=>{
+    a.addEventListener('click', e=>{
+      e.preventDefault();
+      closeSidebarMobile();
+      scrollToSection(a.dataset.scroll);
+    });
+  });
+}
 // Regroupe et affiche des jeux + fiches catalogue mêlés : les jeux par console (même
 // logique que la vue famille du menu Jeux), les fiches catalogue par type puis sous-catégorie.
 // Réutilisé par "À vendre" et par la recherche globale (voir renderGlobalSearchShelf).
+// Renvoie la liste des groupes créés ({id,label,accent}), dans l'ordre d'affichage.
 function renderMixedGroups(shelf, games, cat, idPrefix){
+  const navEntries = [];
   const order = consoleOrder(games);
   const byPlatform = {};
   games.forEach(g=>{ (byPlatform[g.p] = byPlatform[g.p] || []).push(g); });
   order.forEach(o=>{
     if(!byPlatform[o.platform]) return;
+    const id = 'console-'+slug(o.platform);
     shelf.appendChild(buildConsoleSection(o.platform, o.family, sortWithin(byPlatform[o.platform])));
+    navEntries.push({id, label:o.platform, accent:`var(${CAT_VAR[o.family]||'--brass'})`});
   });
 
   const byType = {};
@@ -1618,13 +1639,18 @@ function renderMixedGroups(shelf, games, cat, idPrefix){
         const subItems = bySub[sc];
         const tiles = sortCatalogList(subItems).map(it=>buildCatalogTile(it));
         const label = sc ? `${s.label} / ${sc}` : s.label;
-        shelf.appendChild(buildGroupSection(idPrefix+'-'+s.type+'-'+slug(sc||'sans-sous-categorie'), label, 'Catalogue', subItems.length, 'var(--brass)', tiles));
+        const id = idPrefix+'-'+s.type+'-'+slug(sc||'sans-sous-categorie');
+        shelf.appendChild(buildGroupSection(id, label, 'Catalogue', subItems.length, 'var(--brass)', tiles));
+        navEntries.push({id, label, accent:'var(--brass)'});
       });
     } else {
       const tiles = sortCatalogList(items).map(it=>buildCatalogTile(it));
-      shelf.appendChild(buildGroupSection(idPrefix+'-'+s.type, s.label, 'Catalogue', items.length, 'var(--brass)', tiles));
+      const id = idPrefix+'-'+s.type;
+      shelf.appendChild(buildGroupSection(id, s.label, 'Catalogue', items.length, 'var(--brass)', tiles));
+      navEntries.push({id, label:s.label, accent:'var(--brass)'});
     }
   });
+  return navEntries;
 }
 function renderVenteShelf(){
   const filtered = saleItems();
@@ -1641,7 +1667,8 @@ function renderVenteShelf(){
     shelf.appendChild(empty);
     return;
   }
-  renderMixedGroups(shelf, filtered.filter(it=>it.__kind==='jeu'), filtered.filter(it=>it.__kind==='cat'), 'vente');
+  const navEntries = renderMixedGroups(shelf, filtered.filter(it=>it.__kind==='jeu'), filtered.filter(it=>it.__kind==='cat'), 'vente');
+  renderVenteNavCategories(navEntries);
 }
 // Recherche globale : ignore l'onglet et les filtres actifs, cherche dans toutes les
 // fiches de toutes les collections (jeux + tout le catalogue) sur tous leurs champs.
@@ -2347,6 +2374,15 @@ function updateControlsHeightVar(){
 }
 window.addEventListener('resize', updateControlsHeightVar);
 updateControlsHeightVar();
+// Fait défiler jusqu'à un bloc de la liste (ex : catégories du menu "À vendre"), en tenant
+// compte de la barre de contrôles collante en haut pour ne pas cacher son titre dessous.
+function scrollToSection(id){
+  const el = document.getElementById(id);
+  if(!el) return;
+  const controlsH = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--controls-h')) || 0;
+  const y = el.getBoundingClientRect().top + window.scrollY - controlsH - 12;
+  window.scrollTo({top:Math.max(0,y), behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth'});
+}
 function openSidebarMobile(){ updateControlsHeightVar(); sidebarEl.classList.add('open'); sidebarBackdropEl.hidden = false; }
 function closeSidebarMobile(){ sidebarEl.classList.remove('open'); sidebarBackdropEl.hidden = true; }
 document.getElementById('sidebarToggleBtn').addEventListener('click', openSidebarMobile);
