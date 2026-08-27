@@ -221,15 +221,12 @@ a{color:inherit;}
 .crop-actions button:disabled{opacity:.5; cursor:not-allowed;}
 .crop-magnifier{position:fixed; width:130px; height:130px; border-radius:50%; border:3px solid var(--brass-light); box-shadow:0 6px 20px rgba(0,0,0,.6); pointer-events:none; z-index:330; background:#000;}
 
-/* ---------- POSITIONNEMENT / ZOOM (glisser-déposer) ---------- */
+/* ---------- POSITIONNEMENT (glisser-déposer) ---------- */
 .pos-overlay{position:fixed; inset:0; background:rgba(6,5,4,.94); z-index:320; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:16px; gap:14px;}
 .pos-overlay[hidden]{display:none;}
 .pos-frame{position:relative; overflow:hidden; background:#000; border-radius:4px; touch-action:none; cursor:grab; box-shadow:0 6px 20px rgba(0,0,0,.5);}
 .pos-frame.dragging{cursor:grabbing;}
 .pos-frame img{position:absolute; top:0; left:0; max-width:none; max-height:none; user-select:none; -webkit-user-drag:none; pointer-events:none;}
-.pos-zoom-row{display:flex; align-items:center; gap:10px; width:min(92vw,420px);}
-.pos-zoom-row span{color:var(--muted); font-size:1rem; line-height:1;}
-.pos-zoom-row input[type="range"]{flex:1;}
 .pos-hint{color:var(--muted); font-family:'Inter',sans-serif; font-size:.82rem; text-align:center; max-width:480px;}
 .pos-actions{display:flex; gap:10px;}
 .pos-actions button{font-family:'Inter',sans-serif; font-weight:600; font-size:.9rem; padding:11px 20px; border-radius:6px; border:1px solid var(--brass); background:transparent; color:var(--card); cursor:pointer;}
@@ -380,8 +377,7 @@ a{color:inherit;}
 
 <div class="pos-overlay" id="posOverlay" hidden>
   <div class="pos-frame" id="posFrame"><img id="posImg" alt="" draggable="false"></div>
-  <div class="pos-zoom-row"><span>−</span><input type="range" id="posZoom" min="50" max="400" value="100" step="1" aria-label="Zoom"><span>+</span></div>
-  <p class="pos-hint">Faites glisser la photo pour la repositionner, et utilisez le curseur pour zoomer (des bandes noires peuvent apparaître si la photo ne remplit pas le cadre).</p>
+  <p class="pos-hint">Faites glisser la photo pour la repositionner (des bandes noires peuvent apparaître si la photo ne remplit pas le cadre).</p>
   <div class="pos-actions">
     <button type="button" id="posCancelBtn">Annuler</button>
     <button type="button" id="posConfirmBtn" class="primary">Valider</button>
@@ -742,36 +738,20 @@ document.getElementById('cropConfirmBtn').addEventListener('click', async ()=>{
   }
 });
 
-/* ---------- positionnement / zoom d'une photo déposée dans le cadre de la fiche ---------- */
+/* ---------- positionnement d'une photo déposée dans le cadre de la fiche ---------- */
 const posOverlayEl = document.getElementById('posOverlay');
 const posFrameEl = document.getElementById('posFrame');
 const posImgEl = document.getElementById('posImg');
-const posZoomEl = document.getElementById('posZoom');
-const POS_ZOOM_MIN = 0.5, POS_ZOOM_MAX = 4;
-let posState = null; // {naturalW,naturalH,dispW,dispH,fitScale,zoom,panX,panY,ratio}
+let posState = null; // {naturalW,naturalH,dispW,dispH,fitScale,panX,panY,ratio}
 let posOnConfirm = null;
 let posObjectUrl = null;
 let posDragging = false, posDragStart = null;
 
 function posRender(){
   const s = posState;
-  const scale = s.fitScale * s.zoom;
-  posImgEl.style.width = (s.naturalW*scale) + 'px';
-  posImgEl.style.height = (s.naturalH*scale) + 'px';
+  posImgEl.style.width = (s.naturalW*s.fitScale) + 'px';
+  posImgEl.style.height = (s.naturalH*s.fitScale) + 'px';
   posImgEl.style.transform = `translate(${s.panX}px, ${s.panY}px)`;
-}
-// Change le zoom en gardant fixe le point de l'image actuellement sous (anchorX, anchorY).
-function posSetZoom(newZoom, anchorX, anchorY){
-  const s = posState;
-  newZoom = Math.min(POS_ZOOM_MAX, Math.max(POS_ZOOM_MIN, newZoom));
-  const oldScale = s.fitScale * s.zoom;
-  const localX = (anchorX - s.panX) / oldScale, localY = (anchorY - s.panY) / oldScale;
-  s.zoom = newZoom;
-  const newScale = s.fitScale * s.zoom;
-  s.panX = anchorX - localX*newScale;
-  s.panY = anchorY - localY*newScale;
-  posZoomEl.value = Math.round(newZoom*100);
-  posRender();
 }
 function openPositionOverlay(blob, ratioStr, onConfirm){
   const url = URL.createObjectURL(blob);
@@ -787,11 +767,10 @@ function openPositionOverlay(blob, ratioStr, onConfirm){
     posFrameEl.style.width = dispW+'px';
     posFrameEl.style.height = dispH+'px';
     posImgEl.src = url;
-    posState = {naturalW:img.naturalWidth, naturalH:img.naturalHeight, dispW, dispH, ratio:R, zoom:1, panX:0, panY:0};
+    posState = {naturalW:img.naturalWidth, naturalH:img.naturalHeight, dispW, dispH, ratio:R, panX:0, panY:0};
     posState.fitScale = Math.min(dispW/posState.naturalW, dispH/posState.naturalH);
     posState.panX = (dispW - posState.naturalW*posState.fitScale)/2;
     posState.panY = (dispH - posState.naturalH*posState.fitScale)/2;
-    posZoomEl.value = 100;
     posRender();
     posOverlayEl.hidden = false;
   };
@@ -818,17 +797,6 @@ posFrameEl.addEventListener('pointermove', e=>{
 });
 posFrameEl.addEventListener('pointerup', ()=>{ posDragging = false; posFrameEl.classList.remove('dragging'); });
 posFrameEl.addEventListener('pointercancel', ()=>{ posDragging = false; posFrameEl.classList.remove('dragging'); });
-posFrameEl.addEventListener('wheel', e=>{
-  if(!posState) return;
-  e.preventDefault();
-  const rect = posFrameEl.getBoundingClientRect();
-  const factor = e.deltaY < 0 ? 1.08 : 1/1.08;
-  posSetZoom(posState.zoom*factor, e.clientX-rect.left, e.clientY-rect.top);
-}, {passive:false});
-posZoomEl.addEventListener('input', ()=>{
-  if(!posState) return;
-  posSetZoom(posZoomEl.value/100, posState.dispW/2, posState.dispH/2);
-});
 document.getElementById('posCancelBtn').addEventListener('click', closePositionOverlay);
 document.getElementById('posConfirmBtn').addEventListener('click', ()=>{
   const s = posState;
@@ -842,8 +810,7 @@ document.getElementById('posConfirmBtn').addEventListener('click', ()=>{
   ctx.fillStyle = '#000';
   ctx.fillRect(0, 0, outW, outH);
   const k = outW / s.dispW;
-  const scale = s.fitScale * s.zoom;
-  ctx.drawImage(posImgEl, s.panX*k, s.panY*k, s.naturalW*scale*k, s.naturalH*scale*k);
+  ctx.drawImage(posImgEl, s.panX*k, s.panY*k, s.naturalW*s.fitScale*k, s.naturalH*s.fitScale*k);
   let dataUrl;
   try{ dataUrl = canvas.toDataURL('image/jpeg', 0.82); }
   catch(err){ alert("Échec de l'enregistrement de la photo."); return; }
@@ -854,7 +821,7 @@ document.getElementById('posConfirmBtn').addEventListener('click', ()=>{
 });
 
 // Enchaîne les deux étapes d'ajout d'une photo : recadrage (redressement/découpe) puis
-// positionnement + zoom dans le cadre de la fiche.
+// positionnement dans le cadre de la fiche.
 function addPhotoFlow(file, ratio, onConfirm){
   openCropOverlay(file, croppedBlob=>{
     openPositionOverlay(croppedBlob, ratio, onConfirm);
@@ -2266,11 +2233,9 @@ function closeLightbox(){
 }
 document.getElementById('lightboxOverlay').addEventListener('click', closeLightbox);
 
-overlay.addEventListener('click', e=>{ if(e.target===overlay) closeCard(); });
 document.addEventListener('keydown', e=>{
   if(e.key!=='Escape') return;
   if(!document.getElementById('lightboxOverlay').hidden){ closeLightbox(); return; }
-  if(!overlay.hidden) closeCard();
 });
 document.getElementById('addBtn').addEventListener('click', ()=>{
   if(state.section === 'jeux') openCard(null, true);
