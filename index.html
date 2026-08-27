@@ -1553,8 +1553,22 @@ function renderVenteShelf(){
 const overlay = document.getElementById('modalOverlay');
 const cardEl = document.getElementById('indexCard');
 let lastFocused = null;
+// Pressée pendant l'enregistrement déclenché par Entrée (voir plus bas) : indique à
+// saveCard/saveCatalogCard de fermer la fiche au lieu de repasser en mode consultation.
+let closeCardAfterSave = false;
 function closeCard(){ overlay.hidden = true; cardEl.innerHTML=''; if(lastFocused) lastFocused.focus(); }
 function findGame(id){ return allGames.find(g=>g.id===id); }
+
+// Entrée dans un champ de la fiche = valide et ferme, comme le bouton "Enregistrer" suivi
+// de "Fermer". Ignoré sur les boutons (Entrée y déclenche déjà leur propre clic).
+cardEl.addEventListener('keydown', e=>{
+  if(e.key !== 'Enter' || e.target.tagName === 'BUTTON' || e.target.tagName === 'TEXTAREA') return;
+  const saveBtn = cardEl.querySelector('.card-actions .btn.primary');
+  if(!saveBtn) return;
+  e.preventDefault();
+  closeCardAfterSave = true;
+  saveBtn.click();
+});
 
 function openCard(id, isNew=false){
   if(isNew && isReadOnly()) return;
@@ -2039,16 +2053,18 @@ async function saveCard(g, isNewEntry, btn){
   vals.img = g.img || '';
   if(!vals.n || !vals.p){ document.getElementById('cardError').classList.add('show'); return; }
   btn.disabled = true;
+  const closeAfter = closeCardAfterSave;
+  closeCardAfterSave = false;
   try{
     if(isNewEntry){
       const id = 'u'+Date.now().toString(36)+Math.random().toString(36).slice(2,6);
       await gamesCol.doc(id).set(vals);
       showToast('Fiche ajoutée au fichier');
-      openCard(id, false);
+      closeAfter ? closeCard() : openCard(id, false);
     } else {
       await gamesCol.doc(g.id).update(vals);
       showToast('Fiche mise à jour');
-      openCard(g.id, false);
+      closeAfter ? closeCard() : openCard(g.id, false);
     }
   }catch(err){
     console.error(err);
@@ -2114,16 +2130,18 @@ async function saveCatalogCard(it, isNewEntry, btn){
   const missingMusicNames = isMusicNamed(vals.type, vals.sousCat) && (!vals.artiste || !vals.album);
   if(!vals.n || (TYPES_WITH_SUBCAT.includes(vals.type) && !vals.sousCat) || missingMusicNames){ document.getElementById('cardError').classList.add('show'); return; }
   btn.disabled = true;
+  const closeAfter = closeCardAfterSave;
+  closeCardAfterSave = false;
   try{
     if(isNewEntry){
       const id = 'x'+Date.now().toString(36)+Math.random().toString(36).slice(2,6);
       await catalogCol.doc(id).set(vals);
       showToast('Fiche ajoutée au fichier');
-      openCatalogCard(id, false);
+      closeAfter ? closeCard() : openCatalogCard(id, false);
     } else {
       await catalogCol.doc(it.id).update(vals);
       showToast('Fiche mise à jour');
-      openCatalogCard(it.id, false);
+      closeAfter ? closeCard() : openCatalogCard(it.id, false);
     }
   }catch(err){
     console.error(err);
@@ -2164,6 +2182,7 @@ document.getElementById('lightboxOverlay').addEventListener('click', closeLightb
 document.addEventListener('keydown', e=>{
   if(e.key!=='Escape') return;
   if(!document.getElementById('lightboxOverlay').hidden){ closeLightbox(); return; }
+  if(!overlay.hidden) closeCard();
 });
 document.getElementById('addBtn').addEventListener('click', ()=>{
   if(state.section === 'jeux') openCard(null, true);
