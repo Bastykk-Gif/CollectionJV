@@ -480,9 +480,12 @@ const state = { section:'jeux', q:'', mode:'all', value:null };
 function numberedTitleParts(str){
   const s = str || '';
   const m = s.match(/(^|\s)(\d+)(?=\s|:|$)/);
-  if(!m) return {base:s, num:1};
-  const base = (s.slice(0, m.index+m[1].length) + s.slice(m.index+m[0].length)).replace(/\s{2,}/g,' ').trim();
-  return {base, num:parseInt(m[2],10)};
+  const raw = m ? (s.slice(0, m.index+m[1].length) + s.slice(m.index+m[0].length)) : s;
+  // Les deux-points ne suivent parfois que les entrées numérotées (ex : "Titre 2 : Sous-titre"
+  // contre "Titre Sous-titre" pour l'entrée 1 non numérotée) : on les ignore pour que le reste
+  // du titre reste comparable une fois le numéro retiré.
+  const base = raw.replace(/:/g, ' ').replace(/\s{2,}/g,' ').trim();
+  return {base, num: m ? parseInt(m[2],10) : 1};
 }
 function collator(a,b){
   const pa = numberedTitleParts(a||''), pb = numberedTitleParts(b||'');
