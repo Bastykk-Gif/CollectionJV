@@ -1129,8 +1129,41 @@ authForm.addEventListener('submit', async e=>{
 document.getElementById('logoutBtn').addEventListener('click', ()=>auth.signOut());
 
 /* ---------- filtering / sorting ---------- */
+// Franchises dont l'ordre logique n'est pas alphabétique : les extensions World of Warcraft
+// doivent apparaître dans leur ordre de sortie, pas par ordre de titre (ex : "Cataclysm"
+// sortirait avant "The Burning Crusade" alors qu'il est sorti après).
+function normalizedTitle(s){
+  return (s||'').toLowerCase().replace(/\s*:\s*/g,':').replace(/\s+/g,' ').trim();
+}
+const TITLE_CUSTOM_ORDER = {
+  'world of warcraft': [
+    'world of warcraft',
+    'world of warcraft:the burning crusade',
+    'world of warcraft:wrath of the lich king',
+    'world of warcraft:cataclysm',
+    'world of warcraft:mists of pandaria',
+    'world of warcraft:warlords of draenor',
+    'world of warcraft:legion',
+    'world of warcraft:battle for azeroth',
+    'world of warcraft:shadowlands',
+    'world of warcraft:dragonflight',
+    'world of warcraft:the war within',
+  ],
+};
+function gameCompare(a, b){
+  const na = normalizedTitle(a.n), nb = normalizedTitle(b.n);
+  for(const key in TITLE_CUSTOM_ORDER){
+    if(na.startsWith(key) && nb.startsWith(key)){
+      const order = TITLE_CUSTOM_ORDER[key];
+      const ia = order.indexOf(na), ib = order.indexOf(nb);
+      if(ia !== -1 && ib !== -1 && ia !== ib) return ia - ib;
+      break;
+    }
+  }
+  return collator(a.n, b.n);
+}
 function sortWithin(list){
-  return list.slice().sort((a,b)=> collator(a.n,b.n));
+  return list.slice().sort(gameCompare);
 }
 // Musique : classement alphabétique par nom, année en repli pour départager deux fiches
 // portant exactement le même nom, puis nom de l'album si en plus l'année est identique.
