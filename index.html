@@ -87,6 +87,7 @@ a{color:inherit;}
 .nav-all{padding:10px 18px; font-family:'Inter',sans-serif; font-weight:700; font-size:.92rem; color:var(--card); text-decoration:none; border-left:4px solid transparent; margin-bottom:12px; cursor:pointer;}
 .nav-all:hover{background:rgba(176,141,87,.1);}
 .nav-all.active{background:rgba(176,141,87,.18); border-left-color:var(--brass);}
+.nav-search-note{padding:10px 18px; color:var(--muted); font-family:'Inter',sans-serif; font-size:.82rem;}
 .nav-family{margin-bottom:6px;}
 .nav-fam-row{display:flex; align-items:stretch;}
 .nav-fam-link{flex:1; display:block; padding:9px 18px; font-family:'Inter',sans-serif; font-weight:700; font-size:.85rem; text-transform:uppercase; letter-spacing:.03em; color:var(--card); text-decoration:none; border-left:4px solid transparent; cursor:pointer;}
@@ -1102,6 +1103,17 @@ function sortCatalogList(list){
   if(list.length && list[0].type === 'musique') return list.slice().sort(musicCompare);
   return sortWithin(list);
 }
+// Recherche générique : regarde tous les champs texte/numérique de la fiche (peu importe
+// sa collection), sauf l'id et la photo (base64, non pertinente et coûteuse à parcourir).
+function matchesQuery(obj, q){
+  const text = Object.keys(obj)
+    .filter(k => k !== 'id' && k !== 'img')
+    .map(k => obj[k])
+    .filter(v => typeof v === 'string' || typeof v === 'number')
+    .join(' ')
+    .toLowerCase();
+  return text.includes(q);
+}
 // Numéro affiché sur la fiche (tampon rouge) : position alphabétique de l'objet dans la liste
 // complète "Tout afficher" de sa section — fixe, indépendante du bouton/filtre actuellement actif.
 function gameAlphaPosition(id){
@@ -1280,6 +1292,9 @@ function buildGroupSection(id, name, sub, count, accentVar, tiles){
 function render(){
   renderTicker(allGames.length + allCatalog.length);
   renderSectionTabs();
+  // La recherche porte sur toutes les collections à la fois, sans tenir compte de l'onglet
+  // ni des filtres actifs — voir renderGlobalSearchShelf.
+  if(state.q.trim()){ renderGlobalSearchShelf(state.q.trim().toLowerCase()); return; }
   if(state.section === 'vente'){ renderVenteNav(); renderVenteShelf(); return; }
   if(state.section !== 'jeux'){ renderCatalogNav(); renderCatalogShelf(); return; }
   renderNavMenu(allGames);
@@ -1287,10 +1302,6 @@ function render(){
   let filtered = allGames;
   if(state.mode === 'family') filtered = filtered.filter(g=>g.cat===state.value);
   else if(state.mode === 'platform') filtered = filtered.filter(g=>g.p===state.value);
-  if(state.q.trim()){
-    const q = state.q.trim().toLowerCase();
-    filtered = filtered.filter(g => [g.n,g.pub,g.dev,g.f,g.g,g.p,g.y].join(' ').toLowerCase().includes(q));
-  }
   document.getElementById('resultCount').textContent = `${filtered.length} / ${allGames.length} fiches`;
 
   const shelf = document.getElementById('shelf');
@@ -1469,10 +1480,6 @@ function renderCatalogShelf(){
   let filtered = all;
   if(state.mode === 'family') filtered = filtered.filter(it=>(it.cat||'')===state.value);
   else if(state.mode === 'subcat') filtered = filtered.filter(it=>it.sousCat===state.value);
-  if(state.q.trim()){
-    const q = state.q.trim().toLowerCase();
-    filtered = filtered.filter(it => [it.n,it.cat,it.sousCat,it.remarque,it.pays,it.y,it.consoleLiee,it.jeuLie,it.fabricant,it.numero,it.dateParution].filter(Boolean).join(' ').toLowerCase().includes(q));
-  }
   document.getElementById('resultCount').textContent = `${filtered.length} / ${all.length} fiches`;
 
   const shelf = document.getElementById('shelf');
@@ -1506,30 +1513,10 @@ function renderVenteNav(){
   state.mode = 'all'; state.value = null;
   document.getElementById('navMenu').innerHTML = `<a href="#" class="nav-all active" data-mode="all">Tout afficher</a>`;
 }
-function renderVenteShelf(){
-  let filtered = saleItems();
-  if(state.q.trim()){
-    const q = state.q.trim().toLowerCase();
-    filtered = filtered.filter(it => [it.n,it.p,it.cat,it.sousCat,it.pub,it.dev,it.f,it.g,it.y,it.prix].filter(Boolean).join(' ').toLowerCase().includes(q));
-  }
-  document.getElementById('resultCount').textContent = `${filtered.length} fiche${filtered.length>1?'s':''} à vendre`;
-
-  const shelf = document.getElementById('shelf');
-  shelf.innerHTML = '';
-  if(filtered.length===0){
-    const empty = document.createElement('div');
-    empty.className = 'empty-state';
-    empty.innerHTML = isReadOnly()
-      ? `<h3>Rien à vendre pour l'instant</h3><p>Revenez plus tard.</p>`
-      : `<h3>Rien à vendre pour l'instant</h3><p>Cochez « À vendre » sur une fiche pour qu'elle apparaisse ici.</p>`;
-    shelf.appendChild(empty);
-    return;
-  }
-  // Pas de dropdown sur cette section, mais les fiches restent regroupées : les jeux par
-  // console (même logique que la vue famille du menu Jeux), les fiches catalogue par type.
-  const games = filtered.filter(it=>it.__kind==='jeu');
-  const cat = filtered.filter(it=>it.__kind==='cat');
-
+// Regroupe et affiche des jeux + fiches catalogue mêlés : les jeux par console (même
+// logique que la vue famille du menu Jeux), les fiches catalogue par type puis sous-catégorie.
+// Réutilisé par "À vendre" et par la recherche globale (voir renderGlobalSearchShelf).
+function renderMixedGroups(shelf, games, cat, idPrefix){
   const order = consoleOrder(games);
   const byPlatform = {};
   games.forEach(g=>{ (byPlatform[g.p] = byPlatform[g.p] || []).push(g); });
@@ -1556,13 +1543,52 @@ function renderVenteShelf(){
         const subItems = bySub[sc];
         const tiles = sortCatalogList(subItems).map(it=>buildCatalogTile(it));
         const label = sc ? `${s.label} / ${sc}` : s.label;
-        shelf.appendChild(buildGroupSection('vente-'+s.type+'-'+slug(sc||'sans-sous-categorie'), label, 'Catalogue', subItems.length, 'var(--brass)', tiles));
+        shelf.appendChild(buildGroupSection(idPrefix+'-'+s.type+'-'+slug(sc||'sans-sous-categorie'), label, 'Catalogue', subItems.length, 'var(--brass)', tiles));
       });
     } else {
       const tiles = sortCatalogList(items).map(it=>buildCatalogTile(it));
-      shelf.appendChild(buildGroupSection('vente-'+s.type, s.label, 'Catalogue', items.length, 'var(--brass)', tiles));
+      shelf.appendChild(buildGroupSection(idPrefix+'-'+s.type, s.label, 'Catalogue', items.length, 'var(--brass)', tiles));
     }
   });
+}
+function renderVenteShelf(){
+  const filtered = saleItems();
+  document.getElementById('resultCount').textContent = `${filtered.length} fiche${filtered.length>1?'s':''} à vendre`;
+
+  const shelf = document.getElementById('shelf');
+  shelf.innerHTML = '';
+  if(filtered.length===0){
+    const empty = document.createElement('div');
+    empty.className = 'empty-state';
+    empty.innerHTML = isReadOnly()
+      ? `<h3>Rien à vendre pour l'instant</h3><p>Revenez plus tard.</p>`
+      : `<h3>Rien à vendre pour l'instant</h3><p>Cochez « À vendre » sur une fiche pour qu'elle apparaisse ici.</p>`;
+    shelf.appendChild(empty);
+    return;
+  }
+  renderMixedGroups(shelf, filtered.filter(it=>it.__kind==='jeu'), filtered.filter(it=>it.__kind==='cat'), 'vente');
+}
+// Recherche globale : ignore l'onglet et les filtres actifs, cherche dans toutes les
+// fiches de toutes les collections (jeux + tout le catalogue) sur tous leurs champs.
+function renderGlobalSearchShelf(q){
+  const games = allGames.filter(g=>matchesQuery(g,q)).map(g=>Object.assign({}, g, {__kind:'jeu'}));
+  const cat = allCatalog.filter(it=>matchesQuery(it,q)).map(it=>Object.assign({}, it, {__kind:'cat'}));
+  const total = games.length + cat.length;
+  document.getElementById('resultCount').textContent = `${total} fiche${total>1?'s':''} trouvée${total>1?'s':''} dans toutes les collections`;
+
+  const nav = document.getElementById('navMenu');
+  nav.innerHTML = `<p class="nav-search-note">Recherche dans toutes les collections.</p>`;
+
+  const shelf = document.getElementById('shelf');
+  shelf.innerHTML = '';
+  if(total===0){
+    const empty = document.createElement('div');
+    empty.className = 'empty-state';
+    empty.innerHTML = `<h3>Aucune fiche ne correspond</h3><p>Essayez un autre terme de recherche.</p>`;
+    shelf.appendChild(empty);
+    return;
+  }
+  renderMixedGroups(shelf, games, cat, 'search');
 }
 
 /* ---------- MODAL ---------- */
