@@ -221,16 +221,6 @@ a{color:inherit;}
 .crop-actions button:disabled{opacity:.5; cursor:not-allowed;}
 .crop-magnifier{position:fixed; width:130px; height:130px; border-radius:50%; border:3px solid var(--brass-light); box-shadow:0 6px 20px rgba(0,0,0,.6); pointer-events:none; z-index:330; background:#000;}
 
-/* ---------- POSITIONNEMENT (glisser-déposer) ---------- */
-.pos-overlay{position:fixed; inset:0; background:rgba(6,5,4,.94); z-index:320; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:16px; gap:14px;}
-.pos-overlay[hidden]{display:none;}
-.pos-frame{position:relative; overflow:hidden; background:#000; border-radius:4px; touch-action:none; cursor:grab; box-shadow:0 6px 20px rgba(0,0,0,.5);}
-.pos-frame.dragging{cursor:grabbing;}
-.pos-frame img{position:absolute; top:0; left:0; max-width:none; max-height:none; user-select:none; -webkit-user-drag:none; pointer-events:none;}
-.pos-hint{color:var(--muted); font-family:'Inter',sans-serif; font-size:.82rem; text-align:center; max-width:480px;}
-.pos-actions{display:flex; gap:10px;}
-.pos-actions button{font-family:'Inter',sans-serif; font-weight:600; font-size:.9rem; padding:11px 20px; border-radius:6px; border:1px solid var(--brass); background:transparent; color:var(--card); cursor:pointer;}
-.pos-actions button.primary{background:var(--brass); color:#1b140d;}
 .crop-magnifier[hidden]{display:none;}
 
 .combo-select{display:block; width:100%;}
@@ -367,21 +357,12 @@ a{color:inherit;}
     <canvas id="cropCanvas"></canvas>
     <svg id="cropSvg"></svg>
   </div>
-  <p class="crop-hint">Faites glisser les 4 points sur les coins de la zone à garder : la photo sera redressée et découpée, puis vous pourrez la repositionner.</p>
+  <p class="crop-hint">Faites glisser les 4 points sur les coins de la zone à garder : la photo sera redressée et découpée.</p>
   <div class="crop-actions">
     <button type="button" id="cropCancelBtn">Annuler</button>
     <button type="button" id="cropConfirmBtn" class="primary">Valider</button>
   </div>
   <canvas class="crop-magnifier" id="cropMagnifier" width="130" height="130" hidden></canvas>
-</div>
-
-<div class="pos-overlay" id="posOverlay" hidden>
-  <div class="pos-frame" id="posFrame"><img id="posImg" alt="" draggable="false"></div>
-  <p class="pos-hint">Faites glisser la photo pour la repositionner (des bandes noires peuvent apparaître si la photo ne remplit pas le cadre).</p>
-  <div class="pos-actions">
-    <button type="button" id="posCancelBtn">Annuler</button>
-    <button type="button" id="posConfirmBtn" class="primary">Valider</button>
-  </div>
 </div>
 
 <script>
@@ -738,93 +719,40 @@ document.getElementById('cropConfirmBtn').addEventListener('click', async ()=>{
   }
 });
 
-/* ---------- positionnement d'une photo déposée dans le cadre de la fiche ---------- */
-const posOverlayEl = document.getElementById('posOverlay');
-const posFrameEl = document.getElementById('posFrame');
-const posImgEl = document.getElementById('posImg');
-let posState = null; // {naturalW,naturalH,dispW,dispH,fitScale,panX,panY,ratio}
-let posOnConfirm = null;
-let posObjectUrl = null;
-let posDragging = false, posDragStart = null;
-
-function posRender(){
-  const s = posState;
-  posImgEl.style.width = (s.naturalW*s.fitScale) + 'px';
-  posImgEl.style.height = (s.naturalH*s.fitScale) + 'px';
-  posImgEl.style.transform = `translate(${s.panX}px, ${s.panY}px)`;
-}
-function openPositionOverlay(blob, ratioStr, onConfirm){
+// Finalise la photo recadrée : l'insère centrée (sans découpe) dans un cadre aux
+// proportions de la console, avec des bandes noires si besoin, puis compresse en JPEG.
+function finalizeCroppedPhoto(blob, ratioStr, onConfirm){
   const url = URL.createObjectURL(blob);
   const img = new Image();
   img.onload = ()=>{
-    posObjectUrl = url;
-    posOnConfirm = onConfirm;
     const R = ratioNum(ratioStr);
-    let dispW = Math.min(420, Math.round(window.innerWidth*0.92));
-    let dispH = Math.round(dispW/R);
-    const maxH = Math.round(window.innerHeight*0.6);
-    if(dispH > maxH){ dispH = maxH; dispW = Math.round(dispH*R); }
-    posFrameEl.style.width = dispW+'px';
-    posFrameEl.style.height = dispH+'px';
-    posImgEl.src = url;
-    posState = {naturalW:img.naturalWidth, naturalH:img.naturalHeight, dispW, dispH, ratio:R, panX:0, panY:0};
-    posState.fitScale = Math.min(dispW/posState.naturalW, dispH/posState.naturalH);
-    posState.panX = (dispW - posState.naturalW*posState.fitScale)/2;
-    posState.panY = (dispH - posState.naturalH*posState.fitScale)/2;
-    posRender();
-    posOverlayEl.hidden = false;
+    const outMaxDim = 640;
+    const outW = R >= 1 ? outMaxDim : Math.round(outMaxDim*R);
+    const outH = R >= 1 ? Math.round(outMaxDim/R) : outMaxDim;
+    const fitScale = Math.min(outW/img.naturalWidth, outH/img.naturalHeight);
+    const drawW = img.naturalWidth*fitScale, drawH = img.naturalHeight*fitScale;
+    const dx = (outW-drawW)/2, dy = (outH-drawH)/2;
+    const canvas = document.createElement('canvas');
+    canvas.width = outW; canvas.height = outH;
+    const ctx = canvas.getContext('2d');
+    ctx.fillStyle = '#000';
+    ctx.fillRect(0, 0, outW, outH);
+    ctx.drawImage(img, dx, dy, drawW, drawH);
+    URL.revokeObjectURL(url);
+    let dataUrl;
+    try{ dataUrl = canvas.toDataURL('image/jpeg', 0.82); }
+    catch(err){ alert("Échec de l'enregistrement de la photo."); return; }
+    if(dataUrl.length > 900000){ alert('Image trop volumineuse même après compression'); return; }
+    onConfirm(dataUrl);
   };
   img.onerror = ()=>{ URL.revokeObjectURL(url); alert("Impossible de charger cette photo."); };
   img.src = url;
 }
-function closePositionOverlay(){
-  posOverlayEl.hidden = true;
-  if(posObjectUrl){ URL.revokeObjectURL(posObjectUrl); posObjectUrl = null; }
-  posState = null; posOnConfirm = null;
-}
-posFrameEl.addEventListener('pointerdown', e=>{
-  if(!posState) return;
-  posDragging = true;
-  posDragStart = {x:e.clientX, y:e.clientY, panX:posState.panX, panY:posState.panY};
-  posFrameEl.classList.add('dragging');
-  posFrameEl.setPointerCapture(e.pointerId);
-});
-posFrameEl.addEventListener('pointermove', e=>{
-  if(!posDragging) return;
-  posState.panX = posDragStart.panX + (e.clientX - posDragStart.x);
-  posState.panY = posDragStart.panY + (e.clientY - posDragStart.y);
-  posRender();
-});
-posFrameEl.addEventListener('pointerup', ()=>{ posDragging = false; posFrameEl.classList.remove('dragging'); });
-posFrameEl.addEventListener('pointercancel', ()=>{ posDragging = false; posFrameEl.classList.remove('dragging'); });
-document.getElementById('posCancelBtn').addEventListener('click', closePositionOverlay);
-document.getElementById('posConfirmBtn').addEventListener('click', ()=>{
-  const s = posState;
-  if(!s) return;
-  const outMaxDim = 640;
-  const outW = s.ratio >= 1 ? outMaxDim : Math.round(outMaxDim*s.ratio);
-  const outH = s.ratio >= 1 ? Math.round(outMaxDim/s.ratio) : outMaxDim;
-  const canvas = document.createElement('canvas');
-  canvas.width = outW; canvas.height = outH;
-  const ctx = canvas.getContext('2d');
-  ctx.fillStyle = '#000';
-  ctx.fillRect(0, 0, outW, outH);
-  const k = outW / s.dispW;
-  ctx.drawImage(posImgEl, s.panX*k, s.panY*k, s.naturalW*s.fitScale*k, s.naturalH*s.fitScale*k);
-  let dataUrl;
-  try{ dataUrl = canvas.toDataURL('image/jpeg', 0.82); }
-  catch(err){ alert("Échec de l'enregistrement de la photo."); return; }
-  if(dataUrl.length > 900000){ alert('Image trop volumineuse même après compression'); return; }
-  const cb = posOnConfirm;
-  closePositionOverlay();
-  cb(dataUrl);
-});
 
-// Enchaîne les deux étapes d'ajout d'une photo : recadrage (redressement/découpe) puis
-// positionnement dans le cadre de la fiche.
+// Ajout d'une photo : recadrage (redressement/découpe via les 4 points) puis finalisation.
 function addPhotoFlow(file, ratio, onConfirm){
   openCropOverlay(file, croppedBlob=>{
-    openPositionOverlay(croppedBlob, ratio, onConfirm);
+    finalizeCroppedPhoto(croppedBlob, ratio, onConfirm);
   });
 }
 
