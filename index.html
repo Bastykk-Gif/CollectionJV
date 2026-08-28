@@ -410,7 +410,7 @@ const SECTION_DEFS = [
   {key:'vente', label:'À vendre', type:null},
 ];
 const SECTION_BY_KEY = {}; SECTION_DEFS.forEach(s=>SECTION_BY_KEY[s.key]=s);
-const DERIVE_SUBCATS = ['Accessoires','Amiibo','Figurines','Jouets','Livres','Magazines','Peluches','PLV',"Son & Image"];
+const DERIVE_SUBCATS = ['Accessoires','Amiibo','Autres','Figurines','Jouets','Livres','Magazines','Peluches','PLV',"Son & Image"];
 const MUSIQUE_SUBCATS = ['K7','CD','Vinyles'];
 const TYPES_WITH_SUBCAT = ['derive','musique','systeme'];
 // Sous-catégories par type, chargées depuis meta/subcats et tenues à jour en temps réel —
@@ -1027,6 +1027,18 @@ async function ensureCatalogMigrationV6(meta){
   await metaDoc.set({ catalogMigrationV6:true, catalogMigrationV6At: firebase.firestore.FieldValue.serverTimestamp() }, {merge:true});
 }
 
+async function ensureCatalogMigrationV7(meta){
+  if(meta.catalogMigrationV7) return;
+
+  // Nouvelle sous-catégorie "Autres" pour Produits dérivés (Type/Sous-catégorie/Date de
+  // sortie/Jeu concerné/Fabricant, comme Figurines/Jouets/Peluches/PLV).
+  await db.collection('meta').doc('subcats').set({
+    derive: firebase.firestore.FieldValue.arrayUnion('Autres'),
+  }, {merge:true});
+
+  await metaDoc.set({ catalogMigrationV7:true, catalogMigrationV7At: firebase.firestore.FieldValue.serverTimestamp() }, {merge:true});
+}
+
 function subscribeCatalog(){
   catalogCol.onSnapshot(snap=>{
     allCatalog = snap.docs.map(d=>Object.assign({id:d.id}, d.data()));
@@ -1082,6 +1094,7 @@ async function init(){
       await ensureCatalogMigrationV4(meta);
       await ensureCatalogMigrationV5(meta);
       await ensureCatalogMigrationV6(meta);
+      await ensureCatalogMigrationV7(meta);
     }
   }catch(err){
     console.error(err);
@@ -1782,7 +1795,7 @@ function catalogFieldKeysFor(type, sousCat){
       case 'Livres': return [];
       case 'Magazines': return ['dateParution'];
       case 'Accessoires': return ['consoleLiee','jeuLie'];
-      case 'Figurines': case 'Jouets': case 'Peluches': case 'PLV': return ['y','jeuLie','fabricant'];
+      case 'Figurines': case 'Jouets': case 'Peluches': case 'PLV': case 'Autres': return ['y','jeuLie','fabricant'];
       case 'Son & Image': return ['jeuLie','y'];
       default: return [];
     }
