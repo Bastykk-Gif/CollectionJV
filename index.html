@@ -1200,8 +1200,34 @@ function musicCompare(a, b){
   if(yA !== yB) return yA - yB;
   return collator(a.album || '', b.album || '');
 }
+const MONTHS_FR = {janvier:0,février:1,fevrier:1,mars:2,avril:3,mai:4,juin:5,juillet:6,août:7,aout:7,septembre:8,octobre:9,novembre:10,décembre:11,decembre:11};
+// Convertit une date de parution en français ("23 décembre 2003", "Juillet/Août 2006", "2016"…)
+// en valeur numérique croissante triable. Retourne null si aucune année n'est trouvée.
+function parseFrenchDate(str){
+  if(!str) return null;
+  const s = str.toLowerCase();
+  const yearM = s.match(/(\d{4})/);
+  if(!yearM) return null;
+  const year = parseInt(yearM[1], 10);
+  let month = 0;
+  for(const key in MONTHS_FR){ if(s.includes(key)){ month = MONTHS_FR[key]; break; } }
+  const dayM = s.match(/^(\d{1,2})\s/);
+  const day = dayM ? parseInt(dayM[1], 10) : 1;
+  return year*372 + month*31 + day;
+}
+// Magazines : classement chronologique (date de parution, année en repli), les fiches sans
+// date connue passant en fin de liste (classées entre elles par ordre alphabétique).
+function magazineCompare(a, b){
+  const va = parseFrenchDate(a.dateParution) ?? (a.y ? parseInt(a.y, 10)*372 : null);
+  const vb = parseFrenchDate(b.dateParution) ?? (b.y ? parseInt(b.y, 10)*372 : null);
+  if(va != null && vb != null && va !== vb) return va - vb;
+  if(va != null && vb == null) return -1;
+  if(va == null && vb != null) return 1;
+  return collator(a.n || '', b.n || '');
+}
 function sortCatalogList(list){
   if(list.length && list[0].type === 'musique') return list.slice().sort(musicCompare);
+  if(list.length && list[0].type === 'derive' && list[0].sousCat === 'Magazines') return list.slice().sort(magazineCompare);
   return sortWithin(list);
 }
 // Recherche générique : regarde tous les champs texte/numérique de la fiche (peu importe
