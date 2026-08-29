@@ -462,7 +462,7 @@ const SECTION_TAB_GROUPS = [
   { key:'musique', label:'Musique & Films', kind:'subcats', sectionKey:'musique' },
   { key:'livres', label:'Livres', kind:'subcats', sectionKey:'livres' },
 ];
-const DERIVE_SUBCATS = ['Accessoires','Actualité JV','Amiibo','Autres','Figurines','Jouets','Livres','Peluches','PLV','Retrogaming',"Son & Image"];
+const DERIVE_SUBCATS = ['Accessoires','Actualité JV','Amiibo','Autres','Démo','Figurines','Jouets','Livres','Peluches','PLV','Retrogaming',"Son & Image"];
 const MUSIQUE_SUBCATS = ['K7','CD','Vinyles','VHS','DVD','Blu-ray'];
 const LIVRE_SUBCATS = ['Bande dessinée','Livres'];
 const TYPES_WITH_SUBCAT = ['derive','musique','systeme','livre'];
@@ -1215,6 +1215,18 @@ async function ensureCatalogMigrationV11(meta){
   await metaDoc.set({ catalogMigrationV11:true, catalogMigrationV11At: firebase.firestore.FieldValue.serverTimestamp() }, {merge:true});
 }
 
+async function ensureCatalogMigrationV12(meta){
+  if(meta.catalogMigrationV12) return;
+
+  // Nouvelle sous-catégorie "Démo" pour Produits dérivés (Nom/Console concernée/Date de
+  // sortie, ratio carré par défaut - pas d'entrée dans DERIVE_RATIO nécessaire).
+  await db.collection('meta').doc('subcats').set({
+    derive: firebase.firestore.FieldValue.arrayUnion('Démo'),
+  }, {merge:true});
+
+  await metaDoc.set({ catalogMigrationV12:true, catalogMigrationV12At: firebase.firestore.FieldValue.serverTimestamp() }, {merge:true});
+}
+
 function subscribeCatalog(){
   catalogCol.onSnapshot(snap=>{
     allCatalog = snap.docs.map(d=>Object.assign({id:d.id}, d.data()));
@@ -1275,6 +1287,7 @@ async function init(){
       await ensureCatalogMigrationV9(meta);
       await ensureCatalogMigrationV10(meta);
       await ensureCatalogMigrationV11(meta);
+      await ensureCatalogMigrationV12(meta);
     }
   }catch(err){
     console.error(err);
@@ -2115,6 +2128,7 @@ function catalogFieldKeysFor(type, sousCat){
   if(type === 'derive'){
     switch(sousCat){
       case 'Amiibo': return ['y','numero','jeuLie'];
+      case 'Démo': return ['consoleLiee','y'];
       case 'Livres': return [];
       case 'Actualité JV': case 'Retrogaming': return ['dateParution'];
       case 'Accessoires': return ['consoleLiee','jeuLie'];
