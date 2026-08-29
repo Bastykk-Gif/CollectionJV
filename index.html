@@ -222,9 +222,15 @@ a{color:inherit;}
 .field-vente .vente-checkbox{width:20px; height:20px; accent-color:var(--stamp); cursor:pointer; vertical-align:middle;}
 .fields{margin:0; border-top:1px dashed rgba(255,255,255,.18);}
 .field{display:flex; justify-content:space-between; gap:14px; padding:9px 0; border-bottom:1px dashed rgba(255,255,255,.14); font-size:.92rem; align-items:baseline;}
+.field[hidden]{display:none;}
 .field dt{font-family:'Inter',sans-serif; font-weight:600; text-transform:uppercase; letter-spacing:.04em; color:var(--ink-soft); font-size:.74rem; flex:0 0 38%; margin:0;}
 .field dd{margin:0; text-align:right; font-weight:600; flex:1; word-break:break-word; font-family:'Inter',sans-serif;}
 .field dd input, .field dd select{width:100%; text-align:right; border:none; border-bottom:1px solid var(--ink-soft); background:transparent; color:var(--ink); font-family:'Inter',sans-serif; font-weight:600; font-size:.92rem; padding:3px 0;}
+/* La liste déroulante native (popup) ignore color-scheme sur beaucoup de mobiles (Android
+   notamment) et affiche un fond blanc quoi qu'il arrive - on force donc un texte sombre sur
+   fond blanc pour les <option>, indépendamment du thème sombre du site, pour rester lisible
+   partout plutôt que de dépendre d'un rendu système qu'on ne contrôle pas. */
+select option{color:#1a1a1a; background:#fff;}
 .field dd input:focus-visible, .field dd select:focus-visible{outline:none; border-bottom:2px solid var(--stamp);}
 .field.required dt::after{content:' *'; color:var(--stamp);}
 .card-preview.editable{cursor:pointer;}
@@ -2027,6 +2033,19 @@ const ADD_TYPE_OPTIONS = [
   {value:'musique', label:'Musique'},
   {value:'livre', label:'Livre'},
 ];
+// Le champ "Type" des fiches suit désormais la même hiérarchie que le menu (Jeux vidéo /
+// Musique / Livre) : un premier menu choisit le groupe, un second (uniquement pour "Jeux
+// vidéo", qui ne correspond à aucun vrai type de donnée) précise la collection réelle.
+const TYPE_GROUPS = [
+  {value:'jeuxvideo', label:'Jeux vidéo', types:[
+    {value:'jeu', label:'Jeu'}, {value:'console', label:'Console'}, {value:'systeme', label:'Système de jeu'},
+    {value:'accessoire', label:'Accessoire'}, {value:'derive', label:'Produit dérivé'},
+  ]},
+  {value:'musique', label:'Musique', types:[{value:'musique', label:'Musique'}]},
+  {value:'livre', label:'Livre', types:[{value:'livre', label:'Livre'}]},
+];
+const TYPE_GROUP_OF = {};
+TYPE_GROUPS.forEach(g=>g.types.forEach(t=>{ TYPE_GROUP_OF[t.value] = g.value; }));
 const CATALOG_FIELD_LABELS = {
   y: 'Date de sortie', pays: 'Zone', remarque: 'État',
   consoleLiee: 'Console concernée', jeuLie: 'Jeu concerné',
@@ -2142,8 +2161,11 @@ function renderCard(g, editMode){
   let fieldsHtml = '';
   if(editMode){
     if(isNewEntry){
-      fieldsHtml += `<div class="field required"><dt>Type</dt><dd><select id="f_addType">
-          ${ADD_TYPE_OPTIONS.map(o=>`<option value="${o.value}" ${o.value==='jeu'?'selected':''}>${escapeHtml(o.label)}</option>`).join('')}
+      fieldsHtml += `<div class="field required"><dt>Type</dt><dd><select id="f_addTypeGroup">
+          ${TYPE_GROUPS.map(g=>`<option value="${g.value}" ${g.value==='jeuxvideo'?'selected':''}>${escapeHtml(g.label)}</option>`).join('')}
+        </select></dd></div>`;
+      fieldsHtml += `<div class="field required" id="fieldAddSubtype"><dt>Collection</dt><dd><select id="f_addType">
+          ${TYPE_GROUPS[0].types.map(o=>`<option value="${o.value}" ${o.value==='jeu'?'selected':''}>${escapeHtml(o.label)}</option>`).join('')}
         </select></dd></div>`;
     }
     fieldsHtml += `<div class="field required"><dt>Titre</dt><dd><input type="text" id="f_n" value="${escapeAttr(g.n)}" placeholder="Titre du jeu"></dd></div>`;
@@ -2250,6 +2272,14 @@ function renderCard(g, editMode){
         else { inp.hidden = true; inp.value = ''; }
       });
     });
+    const addGroupSel = document.getElementById('f_addTypeGroup');
+    if(addGroupSel){
+      addGroupSel.addEventListener('change', ()=>{
+        const group = TYPE_GROUPS.find(g=>g.value===addGroupSel.value);
+        if(group.value !== 'jeuxvideo'){ closeCard(); openCatalogCard(null, true, group.types[0].value); return; }
+        document.getElementById('fieldAddSubtype').hidden = false;
+      });
+    }
     const addTypeSel = document.getElementById('f_addType');
     if(addTypeSel){
       addTypeSel.addEventListener('change', ()=>{
@@ -2307,10 +2337,13 @@ function renderCatalogCard(it, editMode){
   const namedByMusic = isMusicNamed(it.type, it.sousCat);
   let fieldsHtml = '';
   if(editMode){
-    const typeOptions = SECTION_DEFS.filter(s=>s.type).map(s=>({value:s.type, label:TYPE_LABELS[s.type]}));
-    if(isNewEntry) typeOptions.unshift({value:'jeu', label:'Jeu'});
-    fieldsHtml += `<div class="field required"><dt>Type</dt><dd><select id="f_type">
-        ${typeOptions.map(o=>`<option value="${o.value}" ${it.type===o.value?'selected':''}>${escapeHtml(o.label)}</option>`).join('')}
+    const currentGroup = TYPE_GROUP_OF[it.type] || 'jeuxvideo';
+    const jvTypes = TYPE_GROUPS[0].types.filter(t=>isNewEntry || t.value !== 'jeu');
+    fieldsHtml += `<div class="field required"><dt>Type</dt><dd><select id="f_typeGroup">
+        ${TYPE_GROUPS.map(g=>`<option value="${g.value}" ${currentGroup===g.value?'selected':''}>${escapeHtml(g.label)}</option>`).join('')}
+      </select></dd></div>`;
+    fieldsHtml += `<div class="field required" id="fieldTypeSubtype" ${currentGroup==='jeuxvideo'?'':'hidden'}><dt>Collection</dt><dd><select id="f_type">
+        ${jvTypes.map(o=>`<option value="${o.value}" ${it.type===o.value?'selected':''}>${escapeHtml(o.label)}</option>`).join('')}
       </select></dd></div>`;
     const nomFieldHtml = `<div class="field required"><dt>Nom</dt><dd><input type="text" id="f_n" value="${escapeAttr(it.n)}" placeholder="Nom de l'objet"></dd></div>`;
     if(!namedByMusic) fieldsHtml += nomFieldHtml;
@@ -2404,6 +2437,18 @@ function renderCatalogCard(it, editMode){
         renderCatalogCard(Object.assign({}, it, vals, {img:''}), true);
       });
     }
+    document.getElementById('f_typeGroup').addEventListener('change', e=>{
+      const group = e.target.value;
+      const vals = readCatalogForm();
+      if(group !== 'jeuxvideo'){
+        renderCatalogCard(Object.assign({}, it, vals, {type:group, sousCat:''}), true);
+        return;
+      }
+      // Passage vers "Jeux vidéo" depuis Musique/Livre : le type actuel n'existe pas dans ce
+      // groupe, on retombe sur "Console" par défaut.
+      const newType = TYPE_GROUP_OF[it.type] === 'jeuxvideo' ? it.type : 'console';
+      renderCatalogCard(Object.assign({}, it, vals, {type:newType, sousCat: newType===it.type ? it.sousCat : ''}), true);
+    });
     document.getElementById('f_type').addEventListener('change', e=>{
       const newType = e.target.value;
       if(newType === 'jeu'){ closeCard(); openCard(null, true); return; }
@@ -2530,8 +2575,13 @@ async function deleteCard(g, btn){
 function readCatalogForm(){
   const getPlain = id => { const el = document.getElementById(id); return el ? el.value.trim() : ''; };
   const getCombo = key => document.getElementById('f_'+key+'_sel') ? comboValue(key) : '';
+  // "f_type" (Console/Système/Jeu/Accessoire/Produit dérivé) n'est la source du type réel que
+  // lorsque le groupe choisi est "Jeux vidéo" - sinon (Musique/Livre) c'est le groupe
+  // lui-même le vrai type, même si le champ "f_type" (cascade non pertinente) reste dans le
+  // DOM en arrière-plan (masqué) avec une valeur qui ne correspond à rien ici.
+  const groupEl = document.getElementById('f_typeGroup');
   const typeEl = document.getElementById('f_type');
-  const type = typeEl ? typeEl.value : undefined;
+  const type = groupEl ? (groupEl.value === 'jeuxvideo' ? (typeEl ? typeEl.value : undefined) : groupEl.value) : (typeEl ? typeEl.value : undefined);
   const sousCat = getCombo('sousCat');
   const artiste = getCombo('artiste');
   const album = getPlain('f_album');
