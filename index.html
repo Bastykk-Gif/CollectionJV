@@ -473,9 +473,23 @@ const TYPES_WITH_SUBCAT = ['derive','musique','systeme','livre'];
 // qu'elle ait été créée à l'origine ou ajoutée depuis le menu. Systèmes de jeux démarre vide :
 // plus de catégories constructeur imposées, seulement celles qu'on crée soi-même.
 let customSubcats = {};
+// Ordre imposé (au lieu de l'alphabétique) pour les sous-catégories de Musique & Films -
+// une éventuelle sous-catégorie future non listée ici serait simplement ajoutée à la fin,
+// triée alphabétiquement parmi ses semblables.
+const MUSIQUE_SUBCAT_ORDER = ['K7','CD','Vinyles','VHS','DVD','Blu-ray'];
 function subcatOptionsFor(type){
   if(!TYPES_WITH_SUBCAT.includes(type)) return null;
-  return (customSubcats[type] || []).slice().sort(collator);
+  const list = (customSubcats[type] || []).slice();
+  if(type === 'musique'){
+    return list.sort((a,b)=>{
+      const ia = MUSIQUE_SUBCAT_ORDER.indexOf(a), ib = MUSIQUE_SUBCAT_ORDER.indexOf(b);
+      if(ia !== -1 && ib !== -1) return ia - ib;
+      if(ia !== -1) return -1;
+      if(ib !== -1) return 1;
+      return collator(a, b);
+    });
+  }
+  return list.sort(collator);
 }
 // Regroupement purement visuel du menu : certaines sous-catégories s'affichent imbriquées
 // sous un intitulé commun (non cliquable comme filtre propre, juste une étiquette + somme des
@@ -1166,6 +1180,41 @@ async function ensureCatalogMigrationV10(meta){
   await metaDoc.set({ catalogMigrationV10:true, catalogMigrationV10At: firebase.firestore.FieldValue.serverTimestamp() }, {merge:true});
 }
 
+// Uniformise l'espacement autour des ":" (" : " partout) dans tous les champs texte, jeux
+// comme catalogue - protège d'abord "http(s)://" pour ne pas casser une éventuelle URL
+// (champ img) avant de renormaliser tous les autres ":".
+function normalizeColonSpacing(s){
+  if(typeof s !== 'string' || !s.includes(':')) return s;
+  return s.replace(/(https?):\s*\/\//gi, '$1__PROTO__//').replace(/\s*:\s*/g, ' : ').replace(/__PROTO__\/\//g, '://');
+}
+async function ensureCatalogMigrationV11(meta){
+  if(meta.catalogMigrationV11) return;
+
+  for(const col of [gamesCol, catalogCol]){
+    const snap = await col.get();
+    const toUpdate = [];
+    snap.docs.forEach(d=>{
+      const data = d.data();
+      const fieldChanges = {};
+      Object.keys(data).forEach(key=>{
+        if(key === 'img') return;
+        const val = data[key];
+        if(typeof val !== 'string' || !val.includes(':')) return;
+        const norm = normalizeColonSpacing(val);
+        if(norm !== val) fieldChanges[key] = norm;
+      });
+      if(Object.keys(fieldChanges).length) toUpdate.push({ref: d.ref, fieldChanges});
+    });
+    for(const chunk of chunkArray(toUpdate, 400)){
+      const batch = db.batch();
+      chunk.forEach(({ref, fieldChanges})=>batch.update(ref, fieldChanges));
+      await batch.commit();
+    }
+  }
+
+  await metaDoc.set({ catalogMigrationV11:true, catalogMigrationV11At: firebase.firestore.FieldValue.serverTimestamp() }, {merge:true});
+}
+
 function subscribeCatalog(){
   catalogCol.onSnapshot(snap=>{
     allCatalog = snap.docs.map(d=>Object.assign({id:d.id}, d.data()));
@@ -1225,6 +1274,7 @@ async function init(){
       await ensureCatalogMigrationV8(meta);
       await ensureCatalogMigrationV9(meta);
       await ensureCatalogMigrationV10(meta);
+      await ensureCatalogMigrationV11(meta);
     }
   }catch(err){
     console.error(err);
