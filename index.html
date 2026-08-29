@@ -1421,9 +1421,16 @@ function magazineCompare(a, b){
   if(va == null && vb != null) return 1;
   return collator(a.n || '', b.n || '');
 }
+// Démo : classement par console concernée (alphabétique), puis par nom (alphabétique).
+function demoCompare(a, b){
+  const cCmp = collator(a.consoleLiee || '', b.consoleLiee || '');
+  if(cCmp !== 0) return cCmp;
+  return collator(a.n || '', b.n || '');
+}
 function sortCatalogList(list){
   if(list.length && list[0].type === 'musique') return list.slice().sort(musicCompare);
   if(list.length && list[0].type === 'derive' && MAGAZINE_SUBCATS.includes(list[0].sousCat)) return list.slice().sort(magazineCompare);
+  if(list.length && list[0].type === 'derive' && list[0].sousCat === 'Démo') return list.slice().sort(demoCompare);
   return sortWithin(list);
 }
 // Recherche générique : regarde tous les champs texte/numérique de la fiche (peu importe
