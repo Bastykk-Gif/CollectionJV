@@ -410,7 +410,7 @@ const SECTION_DEFS = [
   {key:'vente', label:'À vendre', type:null},
 ];
 const SECTION_BY_KEY = {}; SECTION_DEFS.forEach(s=>SECTION_BY_KEY[s.key]=s);
-const DERIVE_SUBCATS = ['Accessoires','Amiibo','Autres','Figurines','Jouets','Livres','Magazines','Peluches','PLV',"Son & Image"];
+const DERIVE_SUBCATS = ['Accessoires','Actualité JV','Amiibo','Autres','Figurines','Jouets','Livres','Peluches','PLV','Retrogaming',"Son & Image"];
 const MUSIQUE_SUBCATS = ['K7','CD','Vinyles'];
 const TYPES_WITH_SUBCAT = ['derive','musique','systeme'];
 // Sous-catégories par type, chargées depuis meta/subcats et tenues à jour en temps réel —
@@ -451,7 +451,7 @@ const CATALOG_RATIO = '1/1'; // consoles/systèmes/accessoires/produits dérivé
 // Formats spécifiques à certaines sous-catégories Musique (le reste du catalogue reste carré).
 const MUSIQUE_RATIO = { 'K7':'64/100', 'CD':'120/120', 'Vinyles':'180/180' };
 // Magazines et livres : ratio A4 portrait.
-const DERIVE_RATIO = { 'Magazines':'210/297', 'Livres':'210/297' };
+const DERIVE_RATIO = { 'Actualité JV':'210/297', 'Retrogaming':'210/297', 'Livres':'210/297' };
 function catalogRatioFor(it){
   if(it.type === 'musique' && MUSIQUE_RATIO[it.sousCat]) return MUSIQUE_RATIO[it.sousCat];
   if(it.type === 'derive' && DERIVE_RATIO[it.sousCat]) return DERIVE_RATIO[it.sousCat];
@@ -1039,6 +1039,31 @@ async function ensureCatalogMigrationV7(meta){
   await metaDoc.set({ catalogMigrationV7:true, catalogMigrationV7At: firebase.firestore.FieldValue.serverTimestamp() }, {merge:true});
 }
 
+async function ensureCatalogMigrationV8(meta){
+  if(meta.catalogMigrationV8) return;
+
+  // La sous-catégorie "Magazines" se scinde en deux : "Actualité JV" pour les numéros dont on
+  // connaît la date de parution, "Retrogaming" pour ceux sans date connue.
+  const snap = await catalogCol.where('type','==','derive').where('sousCat','==','Magazines').get();
+  for(const chunk of chunkArray(snap.docs, 400)){
+    const batch = db.batch();
+    chunk.forEach(d=>{
+      const data = d.data();
+      const hasDate = !!((data.dateParution && data.dateParution.trim()) || (data.y && data.y.trim()));
+      batch.update(d.ref, {sousCat: hasDate ? 'Actualité JV' : 'Retrogaming'});
+    });
+    await batch.commit();
+  }
+  await db.collection('meta').doc('subcats').set({
+    derive: firebase.firestore.FieldValue.arrayUnion('Actualité JV', 'Retrogaming'),
+  }, {merge:true});
+  await db.collection('meta').doc('subcats').set({
+    derive: firebase.firestore.FieldValue.arrayRemove('Magazines'),
+  }, {merge:true});
+
+  await metaDoc.set({ catalogMigrationV8:true, catalogMigrationV8At: firebase.firestore.FieldValue.serverTimestamp() }, {merge:true});
+}
+
 function subscribeCatalog(){
   catalogCol.onSnapshot(snap=>{
     allCatalog = snap.docs.map(d=>Object.assign({id:d.id}, d.data()));
@@ -1095,6 +1120,7 @@ async function init(){
       await ensureCatalogMigrationV5(meta);
       await ensureCatalogMigrationV6(meta);
       await ensureCatalogMigrationV7(meta);
+      await ensureCatalogMigrationV8(meta);
     }
   }catch(err){
     console.error(err);
@@ -1200,6 +1226,9 @@ function musicCompare(a, b){
   if(yA !== yB) return yA - yB;
   return collator(a.album || '', b.album || '');
 }
+// Anciennement une seule sous-catégorie "Magazines", scindée en "Actualité JV" (numéros datés)
+// et "Retrogaming" (numéros sans date connue) — les deux restent triées chronologiquement.
+const MAGAZINE_SUBCATS = ['Actualité JV', 'Retrogaming'];
 const MONTHS_FR = {janvier:0,février:1,fevrier:1,mars:2,avril:3,mai:4,juin:5,juillet:6,août:7,aout:7,septembre:8,octobre:9,novembre:10,décembre:11,decembre:11};
 // Convertit une date de parution en français ("23 décembre 2003", "Juillet/Août 2006", "2016"…)
 // en valeur numérique croissante triable. Retourne null si aucune année n'est trouvée.
@@ -1227,7 +1256,7 @@ function magazineCompare(a, b){
 }
 function sortCatalogList(list){
   if(list.length && list[0].type === 'musique') return list.slice().sort(musicCompare);
-  if(list.length && list[0].type === 'derive' && list[0].sousCat === 'Magazines') return list.slice().sort(magazineCompare);
+  if(list.length && list[0].type === 'derive' && MAGAZINE_SUBCATS.includes(list[0].sousCat)) return list.slice().sort(magazineCompare);
   return sortWithin(list);
 }
 // Recherche générique : regarde tous les champs texte/numérique de la fiche (peu importe
@@ -1603,7 +1632,7 @@ function buildCatalogTile(it){
   // Magazines : toujours l'année (déduite de dateParution si besoin), jamais le nom de la
   // sous-catégorie en repli — sinon certaines fiches affichent "Magazines" au lieu d'une date.
   const magYear = it.y || (it.dateParution||'').match(/\d{4}/)?.[0] || '—';
-  const sub = namedByMusic ? (it.album || '—') : (it.sousCat === 'Magazines' ? magYear : (it.y || it.sousCat || it.dateParution || it.remarque || '—'));
+  const sub = namedByMusic ? (it.album || '—') : (MAGAZINE_SUBCATS.includes(it.sousCat) ? magYear : (it.y || it.sousCat || it.dateParution || it.remarque || '—'));
   div.innerHTML = `<div class="box-art" style="--accent:var(${catAccentVar(it.cat)});aspect-ratio:${catalogRatioFor(it)}">${buildCatalogArtInner(it)}${saleBadgeHtml(it)}</div>
     <div class="box-label"><div class="box-title">${escapeHtml(title)}</div><div class="box-year">${escapeHtml(sub)}</div></div>`;
   div.addEventListener('click', ()=>openCatalogCard(it.id));
@@ -1822,7 +1851,7 @@ function catalogFieldKeysFor(type, sousCat){
     switch(sousCat){
       case 'Amiibo': return ['y','numero'];
       case 'Livres': return [];
-      case 'Magazines': return ['dateParution'];
+      case 'Actualité JV': case 'Retrogaming': return ['dateParution'];
       case 'Accessoires': return ['consoleLiee','jeuLie'];
       case 'Figurines': case 'Jouets': case 'Peluches': case 'PLV': case 'Autres': return ['y','jeuLie','fabricant'];
       case 'Son & Image': return ['jeuLie','y'];
