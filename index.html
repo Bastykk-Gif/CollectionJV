@@ -446,7 +446,7 @@ const SECTION_DEFS = [
   {key:'jeux', label:'Jeux', type:null},
   {key:'accessoires', label:'Accessoires', type:'accessoire'},
   {key:'derives', label:'Produits dérivés', type:'derive'},
-  {key:'musique', label:'Musique', type:'musique'},
+  {key:'musique', label:'Musique & Films', type:'musique'},
   {key:'livres', label:'Livres', type:'livre'},
   {key:'vente', label:'À vendre', type:null},
 ];
@@ -459,11 +459,11 @@ const SECTION_BY_KEY = {}; SECTION_DEFS.forEach(s=>SECTION_BY_KEY[s.key]=s);
 //   fait), cliquer un enfant navigue directement sur cette sous-catégorie.
 const SECTION_TAB_GROUPS = [
   { key:'jeuxvideo', label:'Jeux vidéo', kind:'sections', sections:['consoles','systemes','jeux','accessoires','derives'] },
-  { key:'musique', label:'Musique', kind:'subcats', sectionKey:'musique' },
+  { key:'musique', label:'Musique & Films', kind:'subcats', sectionKey:'musique' },
   { key:'livres', label:'Livres', kind:'subcats', sectionKey:'livres' },
 ];
 const DERIVE_SUBCATS = ['Accessoires','Actualité JV','Amiibo','Autres','Figurines','Jouets','Livres','Peluches','PLV','Retrogaming',"Son & Image"];
-const MUSIQUE_SUBCATS = ['K7','CD','Vinyles'];
+const MUSIQUE_SUBCATS = ['K7','CD','Vinyles','VHS','DVD','Blu-ray'];
 const LIVRE_SUBCATS = ['Bande dessinée','Livres'];
 const TYPES_WITH_SUBCAT = ['derive','musique','systeme','livre'];
 // Sous-catégories par type, chargées depuis meta/subcats et tenues à jour en temps réel -
@@ -523,7 +523,9 @@ const PLATFORM_RATIO = {
 const DEFAULT_RATIO = '135/190';
 const CATALOG_RATIO = '1/1'; // consoles/systèmes/accessoires/produits dérivés : photos carrées
 // Formats spécifiques à certaines sous-catégories Musique (le reste du catalogue reste carré).
-const MUSIQUE_RATIO = { 'K7':'64/100', 'CD':'120/120', 'Vinyles':'180/180' };
+// VHS/DVD/Blu-ray : dimensions standard des jaquettes (pas de mesure réelle fournie pour
+// celles-ci, contrairement au reste de la table).
+const MUSIQUE_RATIO = { 'K7':'64/100', 'CD':'120/120', 'Vinyles':'180/180', 'VHS':'124/191', 'DVD':'136/190', 'Blu-ray':'135/170' };
 // Magazines et livres : ratio A4 portrait.
 const DERIVE_RATIO = { 'Actualité JV':'210/297', 'Retrogaming':'210/297', 'Livres':'210/297' };
 // Bande dessinée : format album franco-belge ; Livres : format poche/roman, plus étroit.
@@ -1153,6 +1155,17 @@ async function ensureCatalogMigrationV9(meta){
   await metaDoc.set({ catalogMigrationV9:true, catalogMigrationV9At: firebase.firestore.FieldValue.serverTimestamp() }, {merge:true});
 }
 
+async function ensureCatalogMigrationV10(meta){
+  if(meta.catalogMigrationV10) return;
+
+  // "Musique" devient "Musique & Films" : nouvelles sous-catégories VHS / DVD / Blu-ray.
+  await db.collection('meta').doc('subcats').set({
+    musique: firebase.firestore.FieldValue.arrayUnion('VHS', 'DVD', 'Blu-ray'),
+  }, {merge:true});
+
+  await metaDoc.set({ catalogMigrationV10:true, catalogMigrationV10At: firebase.firestore.FieldValue.serverTimestamp() }, {merge:true});
+}
+
 function subscribeCatalog(){
   catalogCol.onSnapshot(snap=>{
     allCatalog = snap.docs.map(d=>Object.assign({id:d.id}, d.data()));
@@ -1211,6 +1224,7 @@ async function init(){
       await ensureCatalogMigrationV7(meta);
       await ensureCatalogMigrationV8(meta);
       await ensureCatalogMigrationV9(meta);
+      await ensureCatalogMigrationV10(meta);
     }
   }catch(err){
     console.error(err);
@@ -2021,26 +2035,16 @@ function openCard(id, isNew=false){
 }
 
 /* ---------- fiche catalogue (Consoles / Systèmes de jeux / Accessoires / Produits dérivés) ---------- */
-const TYPE_LABELS = {console:'Console', systeme:'Système de jeu', accessoire:'Accessoire', derive:'Produit dérivé', musique:'Musique', livre:'Livre'};
-// Choix de type disponible à l'ajout d'une fiche, quel que soit l'onglet ouvert au départ.
-const ADD_TYPE_OPTIONS = [
-  {value:'jeu', label:'Jeu'},
-  {value:'console', label:'Console'},
-  {value:'systeme', label:'Système de jeu'},
-  {value:'accessoire', label:'Accessoire'},
-  {value:'derive', label:'Produit dérivé'},
-  {value:'musique', label:'Musique'},
-  {value:'livre', label:'Livre'},
-];
+const TYPE_LABELS = {console:'Console', systeme:'Système de jeu', accessoire:'Accessoire', derive:'Produit dérivé', musique:'Musique & Films', livre:'Livre'};
 // Le champ "Type" des fiches suit désormais la même hiérarchie que le menu (Jeux vidéo /
-// Musique / Livre) : un premier menu choisit le groupe, un second (uniquement pour "Jeux
-// vidéo", qui ne correspond à aucun vrai type de donnée) précise la collection réelle.
+// Musique & Films / Livre) : un premier menu choisit le groupe, un second (uniquement pour
+// "Jeux vidéo", qui ne correspond à aucun vrai type de donnée) précise la collection réelle.
 const TYPE_GROUPS = [
   {value:'jeuxvideo', label:'Jeux vidéo', types:[
     {value:'jeu', label:'Jeu'}, {value:'console', label:'Console'}, {value:'systeme', label:'Système de jeu'},
     {value:'accessoire', label:'Accessoire'}, {value:'derive', label:'Produit dérivé'},
   ]},
-  {value:'musique', label:'Musique', types:[{value:'musique', label:'Musique'}]},
+  {value:'musique', label:'Musique & Films', types:[{value:'musique', label:'Musique & Films'}]},
   {value:'livre', label:'Livre', types:[{value:'livre', label:'Livre'}]},
 ];
 const TYPE_GROUP_OF = {};
@@ -2050,7 +2054,7 @@ const CATALOG_FIELD_LABELS = {
   consoleLiee: 'Console concernée', jeuLie: 'Jeu concerné',
   fabricant: 'Fabricant', numero: 'Numéro', dateParution: 'Date de parution',
   artiste: 'Artiste', album: "Nom de l'album",
-  auteur: 'Auteur', editeur: 'Éditeur', cat: 'Constructeur',
+  auteur: 'Auteur', editeur: 'Éditeur', cat: 'Constructeur', realisateur: 'Réalisateur',
 };
 // Champs affichés par type (et par sous-catégorie pour les produits dérivés/musique) - pas de
 // champ Constructeur : conservé en interne (couleur du liseré) mais plus saisi à la main.
@@ -2072,6 +2076,7 @@ function catalogFieldKeysFor(type, sousCat){
   if(type === 'musique'){
     if(sousCat === 'OST') return ['jeuLie','y'];
     if(sousCat === 'K7' || sousCat === 'CD' || sousCat === 'Vinyles') return ['artiste','album','y'];
+    if(sousCat === 'VHS' || sousCat === 'DVD' || sousCat === 'Blu-ray') return ['realisateur','editeur','y'];
     return [];
   }
   if(type === 'livre') return ['auteur','editeur','y'];
@@ -2103,6 +2108,7 @@ function buildCatalogFieldHtml(key, it){
   if(key === 'artiste') return buildComboField('artiste', label, val, distinctCatalogValues('artiste'), true);
   if(key === 'album') return `<div class="field required"><dt>${label}</dt><dd><input type="text" id="f_album" value="${escapeAttr(val)}" placeholder="Nom de l'album"></dd></div>`;
   if(key === 'auteur') return buildComboField('auteur', label, val, distinctCatalogValues('auteur'), false);
+  if(key === 'realisateur') return buildComboField('realisateur', label, val, distinctCatalogValues('realisateur'), false);
   if(key === 'editeur') return buildComboField('editeur', label, val, distinctCatalogValues('editeur'), false);
   if(key === 'cat'){
     const extra = distinctCatalogValues('cat').filter(c=>!CATS.includes(c));
@@ -2122,7 +2128,7 @@ function openCatalogCard(id, isNew=false, forcedType=null){
     const usesSubcat = TYPES_WITH_SUBCAT.includes(type);
     const defaultCat = (!forcedType && state.mode === 'family') ? state.value : '';
     const defaultSousCat = (!forcedType && usesSubcat && state.mode === 'subcat') ? state.value : '';
-    it = {id:null, type, n:'', cat:defaultCat, sousCat:defaultSousCat, y:'', pays:'', remarque:'', consoleLiee:'', jeuLie:'', fabricant:'', numero:'', dateParution:'', artiste:'', album:'', auteur:'', editeur:'', img:'', vente:false, prix:''};
+    it = {id:null, type, n:'', cat:defaultCat, sousCat:defaultSousCat, y:'', pays:'', remarque:'', consoleLiee:'', jeuLie:'', fabricant:'', numero:'', dateParution:'', artiste:'', album:'', auteur:'', editeur:'', realisateur:'', img:'', vente:false, prix:''};
   } else {
     it = findCatalogItem(id);
   }
@@ -2601,6 +2607,7 @@ function readCatalogForm(){
     artiste,
     album,
     auteur: getCombo('auteur'),
+    realisateur: getCombo('realisateur'),
     editeur: getCombo('editeur'),
     vente: venteEl ? venteEl.checked : false,
     prix: getPlain('f_prix'),
