@@ -109,6 +109,7 @@ a{color:inherit;}
   .row-sections{flex-wrap:wrap;}
   .row-sections:not(.row-sections-child) .section-tab{flex:1 1 0;}
   .row-sections-child .section-tab{flex:1 1 calc(33% - 6px);}
+  .section-tab{font-size:.52rem; padding:8px 2px; letter-spacing:0;}
 }
 
 /* ---------- SIDEBAR ---------- */
@@ -350,7 +351,6 @@ a{color:inherit;}
 
 <nav class="controls">
   <div class="row1">
-    <button class="icon-btn sidebar-toggle-btn" id="sidebarToggleBtn" type="button">☰ Jeux</button>
     <div class="search-row">
       <button type="button" class="search-clear" id="searchClear" aria-label="Effacer la recherche" hidden>✕</button>
       <input id="searchInput" type="text" placeholder="Rechercher un titre, un éditeur, une franchise…" autocomplete="off">
@@ -358,6 +358,7 @@ a{color:inherit;}
   </div>
   <div class="section-tabs-outer" id="sectionTabs"></div>
   <div class="row2">
+    <button class="icon-btn sidebar-toggle-btn" id="sidebarToggleBtn" type="button">☰ Jeux</button>
     <span class="result-count" id="resultCount"></span>
   </div>
 </nav>
