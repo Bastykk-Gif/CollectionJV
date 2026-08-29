@@ -1600,7 +1600,10 @@ function buildCatalogTile(it){
   div.dataset.id = it.id;
   const namedByMusic = isMusicNamed(it.type, it.sousCat);
   const title = it.n;
-  const sub = namedByMusic ? (it.album || '—') : (it.y || it.sousCat || it.dateParution || it.remarque || '—');
+  // Magazines : toujours l'année (déduite de dateParution si besoin), jamais le nom de la
+  // sous-catégorie en repli — sinon certaines fiches affichent "Magazines" au lieu d'une date.
+  const magYear = it.y || (it.dateParution||'').match(/\d{4}/)?.[0] || '—';
+  const sub = namedByMusic ? (it.album || '—') : (it.sousCat === 'Magazines' ? magYear : (it.y || it.sousCat || it.dateParution || it.remarque || '—'));
   div.innerHTML = `<div class="box-art" style="--accent:var(${catAccentVar(it.cat)});aspect-ratio:${catalogRatioFor(it)}">${buildCatalogArtInner(it)}${saleBadgeHtml(it)}</div>
     <div class="box-label"><div class="box-title">${escapeHtml(title)}</div><div class="box-year">${escapeHtml(sub)}</div></div>`;
   div.addEventListener('click', ()=>openCatalogCard(it.id));
