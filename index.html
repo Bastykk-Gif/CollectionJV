@@ -2060,7 +2060,7 @@ function catalogFieldKeysFor(type, sousCat){
   if(type === 'accessoire') return ['consoleLiee','jeuLie','cat'];
   if(type === 'derive'){
     switch(sousCat){
-      case 'Amiibo': return ['y','numero'];
+      case 'Amiibo': return ['y','numero','jeuLie'];
       case 'Livres': return [];
       case 'Actualité JV': case 'Retrogaming': return ['dateParution'];
       case 'Accessoires': return ['consoleLiee','jeuLie'];
