@@ -19,6 +19,7 @@
   --c-nintendo:#C24756; --c-sony:#4A7196; --c-microsoft:#4F9463;
   --c-sega:#3D9AB6; --c-pc:#A6926E; --c-retro:#D2A24F; --c-neutral:#FFFFFF;
   --shadow:0 16px 36px rgba(0,0,0,.6);
+  color-scheme:dark;
 }
 *{box-sizing:border-box;}
 html{scroll-behavior:smooth;}
@@ -31,15 +32,15 @@ a{color:inherit;}
 .sr-only{position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap;}
 
 /* ---------- HERO ---------- */
-.hero{padding:60px 24px 26px; text-align:center; border-bottom:1px solid rgba(232,0,26,.22);}
+.hero{padding:36px 24px 20px; text-align:center; border-bottom:1px solid rgba(232,0,26,.22);}
 .hero-inner{max-width:900px; margin:0 auto; animation:riseIn .6s ease both;}
 @keyframes riseIn{from{opacity:0; transform:translateY(12px);} to{opacity:1; transform:translateY(0);}}
 .eyebrow{font-family:'Press Start 2P',monospace; letter-spacing:.14em; text-transform:uppercase; color:var(--brass-light); font-size:.6rem; margin:0 0 14px; line-height:1.6;}
-.hero-title{font-family:'Chakra Petch',sans-serif; font-weight:700; font-size:clamp(2.6rem,9vw,5.6rem); letter-spacing:.01em; line-height:.9;}
+.hero-title{font-family:'Chakra Petch',sans-serif; font-weight:700; font-size:clamp(1.8rem,6vw,3.6rem); letter-spacing:.01em; line-height:.95;}
 .hero-sub{font-family:'Inter',sans-serif; color:var(--muted); font-size:1rem; margin:12px 0 0;}
 .ticker{display:flex; gap:12px; justify-content:center; align-items:flex-end; margin-top:22px; flex-wrap:wrap;}
 .ticker-num{display:flex; gap:4px;}
-.digit{font-family:'Press Start 2P',monospace; font-size:1.4rem; background:var(--panel); border:1px solid rgba(232,0,26,.4); border-radius:5px; padding:8px 3px; width:1.9ch; text-align:center; color:var(--brass-light);}
+.digit{font-family:'Press Start 2P',monospace; font-size:1.05rem; background:var(--panel); border:1px solid rgba(232,0,26,.4); border-radius:5px; padding:6px 2px; width:1.6ch; text-align:center; color:var(--brass-light);}
 .ticker-label{font-family:'Press Start 2P',monospace; text-transform:uppercase; letter-spacing:.06em; font-size:.52rem; line-height:1.6; color:var(--muted); padding-bottom:8px; text-align:left;}
 .status-line{margin-top:16px; font-family:'Inter',sans-serif; font-size:.82rem; color:var(--muted); display:flex; align-items:center; justify-content:center; gap:7px;}
 .status-dot{width:8px; height:8px; border-radius:50%; background:var(--muted); display:inline-block;}
@@ -89,14 +90,14 @@ a{color:inherit;}
    des 160px de large) dicterait sa propre hauteur et fausserait l'étirement (align-items:
    stretch) de toute la ligne - le bouton doit suivre la hauteur des boutons déroulés en face,
    pas l'inverse. */
-.dk-tab{position:relative; order:1; flex:0 0 160px; padding:0; background:none; border:none; border-radius:10px; cursor:pointer; overflow:hidden;}
+.dk-tab{position:relative; order:1; flex:0 0 160px; min-height:88px; padding:0; background:none; border:none; border-radius:10px; cursor:pointer; overflow:hidden;}
 .dk-tab img{position:absolute; inset:0; width:100%; height:100%; display:block; object-fit:cover; border-radius:10px;}
 .dk-tab:hover{filter:brightness(1.08);}
 .dk-tab:focus-visible{outline:2px solid var(--brass-light); outline-offset:2px;}
 .dk-tab.active img{box-shadow:0 0 0 2px #FF4D5E inset;}
 /* Bouton "À vendre" : même gabarit épais/étiré que Donkey Kong, à droite, coloré dans le
    thème (rouge) au lieu d'une image. */
-.vente-tab{order:3; flex:0 0 120px; background:var(--brass); border:2px solid var(--on-accent); border-radius:10px; color:var(--on-accent); font-family:'Chakra Petch',sans-serif; font-weight:700; font-size:.95rem; text-transform:uppercase; letter-spacing:.03em; cursor:pointer;}
+.vente-tab{order:3; flex:0 0 120px; min-height:88px; background:var(--brass); border:2px solid var(--on-accent); border-radius:10px; color:var(--on-accent); font-family:'Chakra Petch',sans-serif; font-weight:700; font-size:.95rem; text-transform:uppercase; letter-spacing:.03em; cursor:pointer;}
 .vente-tab:hover{filter:brightness(1.1);}
 .vente-tab.active{background:var(--brass-light); box-shadow:0 0 0 2px var(--on-accent) inset;}
 .vente-tab:focus-visible{outline:2px solid var(--card); outline-offset:2px;}
@@ -104,8 +105,8 @@ a{color:inherit;}
   .section-tabs-outer{flex-direction:column;}
   .dk-vente-row{display:flex; gap:8px; width:100%;}
   .section-tabs-wrap{width:100%;}
-  .dk-tab{flex:1 1 0; height:64px;}
-  .vente-tab{flex:1 1 0; height:64px; font-size:1.1rem;}
+  .dk-tab{flex:1 1 0; min-height:0; height:64px;}
+  .vente-tab{flex:1 1 0; min-height:0; height:64px; font-size:1.1rem;}
   .row-sections{flex-wrap:wrap;}
   .row-sections:not(.row-sections-child) .section-tab{flex:1 1 0;}
   .row-sections-child .section-tab{flex:1 1 calc(33% - 6px);}
@@ -282,8 +283,8 @@ a{color:inherit;}
 @media (max-width:640px){
   .console-grid{grid-template-columns:repeat(auto-fill,minmax(108px,1fr)); gap:10px;}
   .index-card{padding:30px 18px 20px;}
-  .digit{font-size:1.4rem;}
-  .hero{padding:64px 16px 22px;}
+  .digit{font-size:.85rem; padding:5px 2px;}
+  .hero{padding:28px 16px 16px;}
   .result-count{margin-left:0; width:100%;}
 }
 @media (prefers-reduced-motion:reduce){
@@ -2031,14 +2032,14 @@ const CATALOG_FIELD_LABELS = {
   consoleLiee: 'Console concernée', jeuLie: 'Jeu concerné',
   fabricant: 'Fabricant', numero: 'Numéro', dateParution: 'Date de parution',
   artiste: 'Artiste', album: "Nom de l'album",
-  auteur: 'Auteur', editeur: 'Éditeur',
+  auteur: 'Auteur', editeur: 'Éditeur', cat: 'Constructeur',
 };
 // Champs affichés par type (et par sous-catégorie pour les produits dérivés/musique) - pas de
 // champ Constructeur : conservé en interne (couleur du liseré) mais plus saisi à la main.
 function catalogFieldKeysFor(type, sousCat){
-  if(type === 'console') return ['y','pays'];
+  if(type === 'console') return ['y','pays','cat'];
   if(type === 'systeme') return ['y','remarque'];
-  if(type === 'accessoire') return ['consoleLiee','jeuLie'];
+  if(type === 'accessoire') return ['consoleLiee','jeuLie','cat'];
   if(type === 'derive'){
     switch(sousCat){
       case 'Amiibo': return ['y','numero'];
@@ -2085,6 +2086,10 @@ function buildCatalogFieldHtml(key, it){
   if(key === 'album') return `<div class="field required"><dt>${label}</dt><dd><input type="text" id="f_album" value="${escapeAttr(val)}" placeholder="Nom de l'album"></dd></div>`;
   if(key === 'auteur') return buildComboField('auteur', label, val, distinctCatalogValues('auteur'), false);
   if(key === 'editeur') return buildComboField('editeur', label, val, distinctCatalogValues('editeur'), false);
+  if(key === 'cat'){
+    const extra = distinctCatalogValues('cat').filter(c=>!CATS.includes(c));
+    return buildComboField('cat', label, val, [...CATS, ...extra], false);
+  }
   return '';
 }
 function findCatalogItem(id){ return allCatalog.find(it=>it.id===id); }
@@ -2532,7 +2537,7 @@ function readCatalogForm(){
   const album = getPlain('f_album');
   const n = getPlain('f_n');
   const venteEl = document.getElementById('f_vente');
-  return {
+  const vals = {
     type,
     n,
     sousCat,
@@ -2551,6 +2556,12 @@ function readCatalogForm(){
     vente: venteEl ? venteEl.checked : false,
     prix: getPlain('f_prix'),
   };
+  // Le champ Constructeur n'existe que pour Console/Accessoire (voir catalogFieldKeysFor) :
+  // ne l'inclure dans la mise à jour que quand il est affiché, pour ne jamais écraser le "cat"
+  // des autres types (Produits dérivés, Musique, Livres, Systèmes de jeux) qui reste géré en
+  // interne, jamais saisi à la main.
+  if(document.getElementById('f_cat_sel')) vals.cat = getCombo('cat');
+  return vals;
 }
 
 async function saveCatalogCard(it, isNewEntry, btn){
