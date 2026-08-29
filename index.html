@@ -69,11 +69,14 @@ a{color:inherit;}
 .result-count{margin-left:auto; font-family:'Inter',sans-serif; font-size:.82rem; color:var(--muted);}
 
 /* ---------- SECTION TABS ---------- */
-/* Bouton Donkey Kong fixe à gauche, aussi haut que le reste (align-items:stretch) - "épais
-   comme 2 boutons" grâce à stretch qui l'étire sur toute la hauteur des 2 lignes quand la
-   ligne des sous-collections est affichée, et sur 1 ligne sinon. */
+/* Bureau : "dk-vente-row" n'existe pas comme boîte propre (display:contents) - Donkey Kong et
+   À vendre deviennent directement des éléments flex de la ligne, aussi hauts que le reste
+   (align-items:stretch) grâce à leur "order" de part et d'autre du bloc central. Mobile :
+   le wrapper redevient une vraie ligne (Donkey Kong + À vendre, 1 case de haut chacun),
+   empilée au-dessus du bloc central qui, lui, passe en pleine largeur - voir le média-query. */
 .section-tabs-outer{display:flex; gap:8px; align-items:stretch; width:100%;}
-.section-tabs-wrap{display:flex; flex-direction:column; gap:6px; flex:1; min-width:0;}
+.dk-vente-row{display:contents;}
+.section-tabs-wrap{display:flex; flex-direction:column; gap:6px; flex:1; min-width:0; order:2;}
 .row-sections{display:flex; gap:6px; width:100%;}
 .section-tab{flex:1 1 0; min-width:0; background:var(--panel); border:1px solid rgba(232,0,26,.28); color:var(--muted); padding:9px 6px; border-radius:6px; font-family:'Inter',sans-serif; font-weight:700; font-size:.72rem; text-transform:uppercase; letter-spacing:.03em; cursor:pointer; text-align:center; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
 .section-tab:hover{color:var(--card); border-color:var(--brass-light);}
@@ -86,22 +89,26 @@ a{color:inherit;}
    des 160px de large) dicterait sa propre hauteur et fausserait l'étirement (align-items:
    stretch) de toute la ligne - le bouton doit suivre la hauteur des boutons déroulés en face,
    pas l'inverse. */
-.dk-tab{position:relative; flex:0 0 160px; padding:0; background:none; border:none; border-radius:10px; cursor:pointer; overflow:hidden;}
+.dk-tab{position:relative; order:1; flex:0 0 160px; padding:0; background:none; border:none; border-radius:10px; cursor:pointer; overflow:hidden;}
 .dk-tab img{position:absolute; inset:0; width:100%; height:100%; display:block; object-fit:cover; border-radius:10px;}
 .dk-tab:hover{filter:brightness(1.08);}
 .dk-tab:focus-visible{outline:2px solid var(--brass-light); outline-offset:2px;}
 .dk-tab.active img{box-shadow:0 0 0 2px #FF4D5E inset;}
 /* Bouton "À vendre" : même gabarit épais/étiré que Donkey Kong, à droite, coloré dans le
    thème (rouge) au lieu d'une image. */
-.vente-tab{flex:0 0 120px; background:var(--brass); border:2px solid var(--on-accent); border-radius:10px; color:var(--on-accent); font-family:'Chakra Petch',sans-serif; font-weight:700; font-size:.95rem; text-transform:uppercase; letter-spacing:.03em; cursor:pointer;}
+.vente-tab{order:3; flex:0 0 120px; background:var(--brass); border:2px solid var(--on-accent); border-radius:10px; color:var(--on-accent); font-family:'Chakra Petch',sans-serif; font-weight:700; font-size:.95rem; text-transform:uppercase; letter-spacing:.03em; cursor:pointer;}
 .vente-tab:hover{filter:brightness(1.1);}
 .vente-tab.active{background:var(--brass-light); box-shadow:0 0 0 2px var(--on-accent) inset;}
 .vente-tab:focus-visible{outline:2px solid var(--card); outline-offset:2px;}
 @media (max-width:640px){
+  .section-tabs-outer{flex-direction:column;}
+  .dk-vente-row{display:flex; gap:8px; width:100%;}
+  .section-tabs-wrap{width:100%;}
+  .dk-tab{flex:1 1 0; height:44px;}
+  .vente-tab{flex:1 1 0; height:44px;}
   .row-sections{flex-wrap:wrap;}
-  .section-tab{flex:1 1 calc(33% - 6px);}
-  .dk-tab{flex-basis:110px;}
-  .vente-tab{flex-basis:80px; font-size:.8rem;}
+  .row-sections:not(.row-sections-child) .section-tab{flex:1 1 0;}
+  .row-sections-child .section-tab{flex:1 1 calc(33% - 6px);}
 }
 
 /* ---------- SIDEBAR ---------- */
@@ -1632,9 +1639,11 @@ function renderSectionTabs(){
 
   const vente = SECTION_BY_KEY.vente;
   const venteActive = !dkActive && state.section === 'vente';
-  box.innerHTML = `<button type="button" class="dk-tab ${dkActive?'active':''}" data-dk="1">${DK_BUTTON_IMG}</button>
-    <div class="section-tabs-wrap">${topHtml}${childHtml}</div>
-    <button type="button" class="vente-tab ${venteActive?'active':''}" data-section="vente">${escapeHtml(vente.label)}</button>`;
+  box.innerHTML = `<div class="dk-vente-row">
+      <button type="button" class="dk-tab ${dkActive?'active':''}" data-dk="1">${DK_BUTTON_IMG}</button>
+      <button type="button" class="vente-tab ${venteActive?'active':''}" data-section="vente">${escapeHtml(vente.label)}</button>
+    </div>
+    <div class="section-tabs-wrap">${topHtml}${childHtml}</div>`;
 
   box.querySelectorAll('[data-section]').forEach(btn=>{
     btn.addEventListener('click', ()=>switchSection(btn.dataset.section));
