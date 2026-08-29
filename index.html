@@ -96,6 +96,7 @@ a{color:inherit;}
 .nav-fam-toggle{flex:0 0 auto; width:32px; background:none; border:none; color:var(--muted); font-size:.8rem; cursor:pointer; display:flex; align-items:center; justify-content:center; transition:transform .15s ease;}
 .nav-fam-toggle:hover{color:var(--card);}
 .nav-fam-toggle.expanded{transform:rotate(90deg);}
+.nav-subcat-children .nav-fam-link{padding-left:32px; font-weight:600;}
 .nav-consoles{display:flex; flex-direction:column;}
 .nav-consoles.collapsed{display:none;}
 .nav-plat-link{display:block; padding:7px 18px 7px 30px; font-family:'Inter',sans-serif; font-size:.82rem; color:var(--muted); text-decoration:none; border-left:4px solid transparent; cursor:pointer;}
@@ -423,6 +424,27 @@ let customSubcats = {};
 function subcatOptionsFor(type){
   if(!TYPES_WITH_SUBCAT.includes(type)) return null;
   return (customSubcats[type] || []).slice().sort(collator);
+}
+// Regroupement purement visuel du menu : certaines sous-catégories s'affichent imbriquées
+// sous un intitulé commun (non cliquable comme filtre propre, juste une étiquette + somme des
+// compteurs) sans créer de vrai niveau de hiérarchie dans les données (sousCat reste à plat).
+const NAV_SUBCAT_GROUPS = { derive: [{ label:'Magazines', subcats:['Actualité JV','Retrogaming'] }] };
+function navGroupByLabel(type, label){
+  return (NAV_SUBCAT_GROUPS[type] || []).find(g=>g.label===label) || null;
+}
+// Construit l'ordre d'affichage du menu (sous-catégories à plat + groupes imbriqués), trié par
+// nom/étiquette pour que le groupe s'intercale naturellement à la bonne place alphabétique.
+function subcatNavEntries(type){
+  const options = subcatOptionsFor(type) || [];
+  const groups = NAV_SUBCAT_GROUPS[type] || [];
+  const childSet = new Set(groups.flatMap(g=>g.subcats));
+  const entries = options.filter(sc=>!childSet.has(sc)).map(name=>({kind:'flat', name}));
+  groups.forEach(g=>{
+    const children = g.subcats.filter(sc=>options.includes(sc));
+    if(children.length) entries.push({kind:'group', label:g.label, children});
+  });
+  entries.sort((a,b)=>collator(a.kind==='flat'?a.name:a.label, b.kind==='flat'?b.name:b.label));
+  return entries;
 }
 // K7/CD/Vinyles : pas de champ "Nom" saisi à la main, le titre de la fiche est dérivé de Artiste + Album.
 function isMusicNamed(type, sousCat){ return type === 'musique' && (sousCat === 'K7' || sousCat === 'CD' || sousCat === 'Vinyles'); }
@@ -1536,11 +1558,18 @@ function renderCatalogNav(){
   const items = catalogItemsForSection();
   let html = `<a href="#" class="nav-all ${state.mode==='all'?'active':''}" data-mode="all">Tout afficher<span class="nav-count">${items.length}</span></a>`;
   if(usesSubcat){
-    subcatOptionsFor(sectionType).forEach(sc=>{
+    const renderChild = sc=>{
       const active = (state.mode==='subcat' && state.value===sc) ? 'active' : '';
       const count = items.filter(it=>it.sousCat===sc).length;
       const delHtml = !isReadOnly() ? `<button type="button" class="nav-subcat-del" data-subcat="${escapeAttr(sc)}" aria-label="Supprimer la sous-catégorie ${escapeHtml(sc)}" title="Supprimer cette sous-catégorie">×</button>` : '';
-      html += `<div class="nav-fam-row"><a href="#" class="nav-fam-link ${active}" data-mode="subcat" data-value="${escapeAttr(sc)}" style="flex:1;">${escapeHtml(sc)}<span class="nav-count">${count}</span></a>${delHtml}</div>`;
+      return `<div class="nav-fam-row"><a href="#" class="nav-fam-link ${active}" data-mode="subcat" data-value="${escapeAttr(sc)}" style="flex:1;">${escapeHtml(sc)}<span class="nav-count">${count}</span></a>${delHtml}</div>`;
+    };
+    subcatNavEntries(sectionType).forEach(entry=>{
+      if(entry.kind==='flat'){ html += renderChild(entry.name); return; }
+      const groupActive = (state.mode==='subcatGroup' && state.value===entry.label) ? 'active' : '';
+      const groupCount = items.filter(it=>entry.children.includes(it.sousCat)).length;
+      html += `<a href="#" class="nav-fam-link ${groupActive}" data-mode="subcatGroup" data-value="${escapeAttr(entry.label)}">${escapeHtml(entry.label)}<span class="nav-count">${groupCount}</span></a>`;
+      html += `<div class="nav-subcat-children">${entry.children.map(renderChild).join('')}</div>`;
     });
     if(!isReadOnly()){
       html += `<div class="nav-subcat-add">
@@ -1644,6 +1673,10 @@ function renderCatalogShelf(){
   let filtered = all;
   if(state.mode === 'family') filtered = filtered.filter(it=>(it.cat||'')===state.value);
   else if(state.mode === 'subcat') filtered = filtered.filter(it=>it.sousCat===state.value);
+  else if(state.mode === 'subcatGroup'){
+    const group = navGroupByLabel(SECTION_BY_KEY[state.section].type, state.value);
+    filtered = group ? filtered.filter(it=>group.children.includes(it.sousCat)) : [];
+  }
   document.getElementById('resultCount').textContent = `${filtered.length} / ${all.length} fiches`;
 
   const shelf = document.getElementById('shelf');
