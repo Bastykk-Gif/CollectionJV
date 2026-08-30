@@ -498,6 +498,11 @@ const NAV_SUBCAT_GROUPS = { derive: [{ label:'Magazines', subcats:['Actualité J
 function navGroupByLabel(type, label){
   return (NAV_SUBCAT_GROUPS[type] || []).find(g=>g.label===label) || null;
 }
+// Retrouve le groupe (ex. "Magazines") auquel appartient une sous-catégorie (ex. "Actualité JV"),
+// pour l'affichage "Groupe / Sous-catégorie" dans la recherche globale et "À vendre".
+function navGroupForSubcat(type, sc){
+  return (NAV_SUBCAT_GROUPS[type] || []).find(g=>g.subcats.includes(sc)) || null;
+}
 // Construit l'ordre d'affichage du menu (sous-catégories à plat + groupes imbriqués), trié par
 // nom/étiquette pour que le groupe s'intercale naturellement à la bonne place alphabétique.
 function subcatNavEntries(type){
@@ -1421,7 +1426,7 @@ function magazineCompare(a, b){
   if(va == null && vb != null) return 1;
   return collator(a.n || '', b.n || '');
 }
-// Démo : classement par console concernée (alphabétique), puis par nom (alphabétique).
+// Démo et Accessoires : classement par console concernée (alphabétique), puis par nom (alphabétique).
 function demoCompare(a, b){
   const cCmp = collator(a.consoleLiee || '', b.consoleLiee || '');
   if(cCmp !== 0) return cCmp;
@@ -1431,6 +1436,7 @@ function sortCatalogList(list){
   if(list.length && list[0].type === 'musique') return list.slice().sort(musicCompare);
   if(list.length && list[0].type === 'derive' && MAGAZINE_SUBCATS.includes(list[0].sousCat)) return list.slice().sort(magazineCompare);
   if(list.length && list[0].type === 'derive' && list[0].sousCat === 'Démo') return list.slice().sort(demoCompare);
+  if(list.length && list[0].type === 'accessoire') return list.slice().sort(demoCompare);
   return sortWithin(list);
 }
 // Recherche générique : regarde tous les champs texte/numérique de la fiche (peu importe
@@ -1908,7 +1914,9 @@ function buildCatalogTile(it){
   // Magazines : toujours l'année (déduite de dateParution si besoin), jamais le nom de la
   // sous-catégorie en repli - sinon certaines fiches affichent "Magazines" au lieu d'une date.
   const magYear = it.y || (it.dateParution||'').match(/\d{4}/)?.[0] || '-';
-  const sub = namedByMusic ? (it.album || '-') : (MAGAZINE_SUBCATS.includes(it.sousCat) ? magYear : (it.y || it.sousCat || it.dateParution || it.remarque || '-'));
+  const sub = namedByMusic ? (it.album || '-')
+    : (it.type === 'accessoire') ? (it.consoleLiee || '-')
+    : (MAGAZINE_SUBCATS.includes(it.sousCat) ? magYear : (it.y || it.sousCat || it.dateParution || it.remarque || '-'));
   div.innerHTML = `<div class="box-art" style="--accent:var(${catAccentVar(it.cat)});aspect-ratio:${catalogRatioFor(it)}">${buildCatalogArtInner(it)}${saleBadgeHtml(it)}</div>
     <div class="box-label"><div class="box-title">${escapeHtml(title)}</div><div class="box-year">${escapeHtml(sub)}</div></div>`;
   div.addEventListener('click', ()=>openCatalogCard(it.id));
@@ -2008,7 +2016,8 @@ function renderMixedGroups(shelf, games, cat, idPrefix){
       [...orderedSubs, ...extraSubs, ...blankSub].forEach(sc=>{
         const subItems = bySub[sc];
         const tiles = sortCatalogList(subItems).map(it=>buildCatalogTile(it));
-        const label = sc ? `${s.label} / ${sc}` : s.label;
+        const group = sc ? navGroupForSubcat(s.type, sc) : null;
+        const label = group ? `${group.label} / ${sc}` : (sc || s.label);
         const id = idPrefix+'-'+s.type+'-'+slug(sc||'sans-sous-categorie');
         shelf.appendChild(buildGroupSection(id, label, 'Catalogue', subItems.length, 'var(--brass)', tiles));
         navEntries.push({id, label, accent:'var(--brass)', count:subItems.length});
