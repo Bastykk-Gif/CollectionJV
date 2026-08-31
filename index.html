@@ -1441,6 +1441,9 @@ function sortCatalogList(list){
 }
 // Recherche générique : regarde tous les champs texte/numérique de la fiche (peu importe
 // sa collection), sauf l'id et la photo (base64, non pertinente et coûteuse à parcourir).
+// Plusieurs termes séparés par ";" = recherche OR (une fiche correspond si elle
+// matche au moins un des termes). Ex : "kaamelott;astier" trouve les fiches "kaamelott"
+// ET les fiches "astier".
 function matchesQuery(obj, q){
   const text = Object.keys(obj)
     .filter(k => k !== 'id' && k !== 'img')
@@ -1448,7 +1451,9 @@ function matchesQuery(obj, q){
     .filter(v => typeof v === 'string' || typeof v === 'number')
     .join(' ')
     .toLowerCase();
-  return text.includes(q);
+  const terms = q.split(';').map(t=>t.trim()).filter(Boolean);
+  if(terms.length === 0) return true;
+  return terms.some(term => text.includes(term));
 }
 // Numéro affiché sur la fiche (tampon rouge) : position alphabétique de l'objet dans la liste
 // complète "Tout afficher" de sa section - fixe, indépendante du bouton/filtre actuellement actif.
