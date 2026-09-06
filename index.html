@@ -2145,7 +2145,7 @@ const CATALOG_FIELD_LABELS = {
 function catalogFieldKeysFor(type, sousCat){
   if(type === 'console') return ['y','pays','cat'];
   if(type === 'systeme') return ['y','remarque'];
-  if(type === 'accessoire') return ['consoleLiee','jeuLie','cat'];
+  if(type === 'accessoire') return ['consoleLiee','jeuLie','cat','fabricant'];
   if(type === 'derive'){
     switch(sousCat){
       case 'Amiibo': return ['y','numero','jeuLie'];
