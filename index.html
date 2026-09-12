@@ -464,7 +464,7 @@ const SECTION_TAB_GROUPS = [
 ];
 const DERIVE_SUBCATS = ['Accessoires','Amiibo','Autres','Démo','Figurines','Jouets','Peluches','PLV',"Son & Image"];
 const MUSIQUE_SUBCATS = ['K7','CD','Vinyles','VHS','DVD','Blu-ray'];
-const LIVRE_SUBCATS = ['Actualité JV','Bande dessinée','Livres','Retrogaming'];
+const LIVRE_SUBCATS = ['Actualité JV','Bandes dessinées','Livres','Retrogaming'];
 const TYPES_WITH_SUBCAT = ['derive','musique','systeme','livre'];
 // Sous-catégories par type, chargées depuis meta/subcats et tenues à jour en temps réel -
 // voir subscribeSubcats(). Pour Produits dérivés/Musique, les listes ci-dessus ne servent
@@ -545,9 +545,9 @@ const CATALOG_RATIO = '1/1'; // consoles/systèmes/accessoires/produits dérivé
 // VHS/DVD/Blu-ray : dimensions standard des jaquettes (pas de mesure réelle fournie pour
 // celles-ci, contrairement au reste de la table).
 const MUSIQUE_RATIO = { 'K7':'64/100', 'CD':'120/120', 'Vinyles':'180/180', 'VHS':'124/191', 'DVD':'136/190', 'Blu-ray':'135/170' };
-// Bande dessinée : format album franco-belge ; Livres (romans, artbooks, guides) : format
+// Bandes dessinées : format album franco-belge ; Livres (romans, artbooks, guides) : format
 // poche/roman ; Actualité JV/Retrogaming (Magazines) : ratio A4 portrait.
-const LIVRE_RATIO = { 'Bande dessinée':'215/290', 'Livres':'140/210', 'Actualité JV':'210/297', 'Retrogaming':'210/297' };
+const LIVRE_RATIO = { 'Bandes dessinées':'215/290', 'Livres':'140/210', 'Actualité JV':'210/297', 'Retrogaming':'210/297' };
 function catalogRatioFor(it){
   if(it.type === 'musique' && MUSIQUE_RATIO[it.sousCat]) return MUSIQUE_RATIO[it.sousCat];
   if(it.type === 'livre' && LIVRE_RATIO[it.sousCat]) return LIVRE_RATIO[it.sousCat];
@@ -1272,6 +1272,26 @@ async function ensureCatalogMigrationV14(meta){
   await metaDoc.set({ catalogMigrationV14:true, catalogMigrationV14At: firebase.firestore.FieldValue.serverTimestamp() }, {merge:true});
 }
 
+async function ensureCatalogMigrationV15(meta){
+  if(meta.catalogMigrationV15) return;
+
+  // "Bande dessinée" au singulier devient "Bandes dessinées" au pluriel.
+  const snap = await catalogCol.where('type','==','livre').where('sousCat','==','Bande dessinée').get();
+  for(const chunk of chunkArray(snap.docs, 400)){
+    const batch = db.batch();
+    chunk.forEach(d=>batch.update(d.ref, {sousCat:'Bandes dessinées'}));
+    await batch.commit();
+  }
+  await db.collection('meta').doc('subcats').set({
+    livre: firebase.firestore.FieldValue.arrayUnion('Bandes dessinées'),
+  }, {merge:true});
+  await db.collection('meta').doc('subcats').set({
+    livre: firebase.firestore.FieldValue.arrayRemove('Bande dessinée'),
+  }, {merge:true});
+
+  await metaDoc.set({ catalogMigrationV15:true, catalogMigrationV15At: firebase.firestore.FieldValue.serverTimestamp() }, {merge:true});
+}
+
 function subscribeCatalog(){
   catalogCol.onSnapshot(snap=>{
     allCatalog = snap.docs.map(d=>Object.assign({id:d.id}, d.data()));
@@ -1335,6 +1355,7 @@ async function init(){
       await ensureCatalogMigrationV12(meta);
       await ensureCatalogMigrationV13(meta);
       await ensureCatalogMigrationV14(meta);
+      await ensureCatalogMigrationV15(meta);
     }
   }catch(err){
     console.error(err);
@@ -1735,7 +1756,7 @@ function isGroupExpanded(group){
   return expandedGroupKey === group.key || isGroupSectionMatch(group);
 }
 function groupChildren(group){
-  return group.kind === 'sections' ? group.sections : subcatOptionsFor(SECTION_BY_KEY[group.sectionKey].type);
+  return group.kind === 'sections' ? group.sections : subcatNavEntries(SECTION_BY_KEY[group.sectionKey].type);
 }
 // Image du bouton "Collection Donkey Kong" (coins blancs rendus transparents), encodée en
 // base64 pour rester dans le fichier unique - voir Bouton_Collection_Donkey_Kong.jpg à la
@@ -1771,13 +1792,17 @@ function renderSectionTabs(){
   let childHtml = '';
   if(openGroup){
     const children = groupChildren(openGroup) || [];
-    childHtml = `<div class="row-sections row-sections-child">` + children.map(key=>{
+    childHtml = `<div class="row-sections row-sections-child">` + children.map(child=>{
       if(openGroup.kind === 'sections'){
-        const s = SECTION_BY_KEY[key];
-        return `<button type="button" class="section-tab child-tab ${!dkActive && state.section===key?'active':''}" data-section="${key}">${escapeHtml(s.label)}</button>`;
+        const s = SECTION_BY_KEY[child];
+        return `<button type="button" class="section-tab child-tab ${!dkActive && state.section===child?'active':''}" data-section="${child}">${escapeHtml(s.label)}</button>`;
       }
-      const isActiveChild = !dkActive && state.section===openGroup.sectionKey && state.mode==='subcat' && state.value===key;
-      return `<button type="button" class="section-tab child-tab ${isActiveChild?'active':''}" data-subcat-nav="${openGroup.sectionKey}|${escapeAttr(key)}">${escapeHtml(key)}</button>`;
+      if(child.kind === 'flat'){
+        const isActiveChild = !dkActive && state.section===openGroup.sectionKey && state.mode==='subcat' && state.value===child.name;
+        return `<button type="button" class="section-tab child-tab ${isActiveChild?'active':''}" data-subcat-nav="subcat|${openGroup.sectionKey}|${escapeAttr(child.name)}">${escapeHtml(child.name)}</button>`;
+      }
+      const isActiveGroup = !dkActive && state.section===openGroup.sectionKey && state.mode==='subcatGroup' && state.value===child.label;
+      return `<button type="button" class="section-tab child-tab ${isActiveGroup?'active':''}" data-subcat-nav="subcatGroup|${openGroup.sectionKey}|${escapeAttr(child.label)}">${escapeHtml(child.label)}</button>`;
     }).join('') + `</div>`;
   }
 
@@ -1794,8 +1819,8 @@ function renderSectionTabs(){
   });
   box.querySelectorAll('[data-subcat-nav]').forEach(btn=>{
     btn.addEventListener('click', ()=>{
-      const [sectionKey, subcat] = btn.dataset.subcatNav.split('|');
-      switchToSubcat(sectionKey, subcat);
+      const [mode, sectionKey, value] = btn.dataset.subcatNav.split('|');
+      switchToSubcat(sectionKey, value, mode);
     });
   });
   box.querySelectorAll('[data-group-toggle]').forEach(btn=>{
@@ -1824,11 +1849,11 @@ function switchSection(key){
   closeSidebarMobile();
   render();
 }
-function switchToSubcat(sectionKey, subcatValue){
+function switchToSubcat(sectionKey, subcatValue, mode='subcat'){
   const wasSearching = !!state.q.trim();
   expandedGroupKey = null;
   state.section = sectionKey;
-  state.mode = 'subcat';
+  state.mode = mode;
   state.value = subcatValue;
   if(wasSearching){ state.q = ''; searchInputEl.value = ''; updateSearchClearVisibility(); }
   closeSidebarMobile();
@@ -1977,7 +2002,7 @@ function renderCatalogShelf(){
   else if(state.mode === 'subcat') filtered = filtered.filter(it=>it.sousCat===state.value);
   else if(state.mode === 'subcatGroup'){
     const group = navGroupByLabel(SECTION_BY_KEY[state.section].type, state.value);
-    filtered = group ? filtered.filter(it=>group.children.includes(it.sousCat)) : [];
+    filtered = group ? filtered.filter(it=>group.subcats.includes(it.sousCat)) : [];
   }
   document.getElementById('resultCount').textContent = `${filtered.length} / ${all.length} fiches`;
 
