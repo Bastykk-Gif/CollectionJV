@@ -1495,11 +1495,22 @@ function demoCompare(a, b){
   if(cCmp !== 0) return cCmp;
   return collator(a.n || '', b.n || '');
 }
+// Consoles et Systèmes de jeux : classement chronologique (année de sortie), les fiches sans
+// année connue passant en fin de liste (classées entre elles par ordre alphabétique).
+function yearCompare(a, b){
+  const ya = parseInt(a.y, 10), yb = parseInt(b.y, 10);
+  const va = isNaN(ya) ? null : ya, vb = isNaN(yb) ? null : yb;
+  if(va != null && vb != null && va !== vb) return va - vb;
+  if(va != null && vb == null) return -1;
+  if(va == null && vb != null) return 1;
+  return collator(a.n || '', b.n || '');
+}
 function sortCatalogList(list){
   if(list.length && list[0].type === 'musique') return list.slice().sort(musicCompare);
   if(list.length && list[0].type === 'livre' && MAGAZINE_SUBCATS.includes(list[0].sousCat)) return list.slice().sort(magazineCompare);
   if(list.length && list[0].type === 'derive' && list[0].sousCat === 'Démo') return list.slice().sort(demoCompare);
   if(list.length && list[0].type === 'accessoire') return list.slice().sort(demoCompare);
+  if(list.length && (list[0].type === 'console' || list[0].type === 'systeme')) return list.slice().sort(yearCompare);
   return sortWithin(list);
 }
 // Recherche générique : regarde tous les champs texte/numérique de la fiche (peu importe
