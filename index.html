@@ -204,12 +204,12 @@ a{color:inherit;}
 .scroll-top-btn:focus-visible{outline:2px solid var(--brass-light); outline-offset:2px;}
 
 /* Pastille "contact vente" : flottante, discrète, uniquement sur la page À vendre. */
-.sell-phone-float{position:fixed; left:20px; bottom:20px; z-index:49; background:var(--panel); border:1px solid rgba(232,0,26,.4); border-radius:999px; padding:8px 14px; box-shadow:0 8px 20px rgba(0,0,0,.4); opacity:.88; pointer-events:none;}
+.sell-phone-float{position:fixed; left:20px; bottom:20px; z-index:49; background:var(--panel); border:1px solid rgba(232,0,26,.4); border-radius:999px; padding:10px 18px; box-shadow:0 8px 20px rgba(0,0,0,.4); opacity:.94; pointer-events:none;}
 .sell-phone-float[hidden]{display:none;}
-.sell-phone-float img{display:block; height:22px; width:auto;}
+.sell-phone-float img{display:block; height:32px; width:auto;}
 @media (max-width:880px){
-  .sell-phone-float{left:14px; bottom:14px; padding:7px 12px;}
-  .sell-phone-float img{height:20px;}
+  .sell-phone-float{left:14px; bottom:14px; padding:9px 15px;}
+  .sell-phone-float img{height:28px;}
 }
 
 /* ---------- MODAL ---------- */
@@ -2895,13 +2895,16 @@ updateScrollTopVisibility();
 function drawSellPhoneBadge(){
   const phone = '06 99 71 96 44';
   const dpr = window.devicePixelRatio || 1;
-  const w = 176, h = 40;
+  // Ces dimensions logiques doivent rester proches de la taille CSS d'affichage
+  // (voir .sell-phone-float img) : les réduire fortement à l'écran re-réduit le
+  // texte déjà dessiné et le rend illisible (c'était le bug signalé).
+  const w = 240, h = 48;
   const canvas = document.createElement('canvas');
   canvas.width = w*dpr; canvas.height = h*dpr;
   const ctx = canvas.getContext('2d');
   ctx.scale(dpr, dpr);
   ctx.fillStyle = '#F2F0EC';
-  ctx.font = "700 15px 'Inter', sans-serif";
+  ctx.font = "700 24px 'Inter', sans-serif";
   ctx.textBaseline = 'middle';
   ctx.textAlign = 'center';
   ctx.fillText('\u{1F4DE} ' + phone, w/2, h/2 + 1);
