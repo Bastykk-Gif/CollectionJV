@@ -203,6 +203,15 @@ a{color:inherit;}
 .scroll-top-btn:hover{border-color:var(--brass-light);}
 .scroll-top-btn:focus-visible{outline:2px solid var(--brass-light); outline-offset:2px;}
 
+/* Pastille "contact vente" : flottante, discrète, uniquement sur la page À vendre. */
+.sell-phone-float{position:fixed; left:20px; bottom:20px; z-index:49; background:var(--panel); border:1px solid rgba(232,0,26,.4); border-radius:999px; padding:8px 14px; box-shadow:0 8px 20px rgba(0,0,0,.4); opacity:.88; pointer-events:none;}
+.sell-phone-float[hidden]{display:none;}
+.sell-phone-float img{display:block; height:22px; width:auto;}
+@media (max-width:880px){
+  .sell-phone-float{left:14px; bottom:14px; padding:7px 12px;}
+  .sell-phone-float img{height:20px;}
+}
+
 /* ---------- MODAL ---------- */
 .modal-overlay{position:fixed; inset:0; background:rgba(8,8,8,.72); backdrop-filter:blur(3px); display:flex; align-items:center; justify-content:center; padding:20px; z-index:100;}
 .modal-overlay[hidden]{display:none;}
@@ -384,6 +393,7 @@ select option{color:#1a1a1a; background:#fff;}
 
 <button id="addBtn" class="fab" aria-label="Ajouter un jeu au fichier" disabled>+</button>
 <button id="scrollTopBtn" class="scroll-top-btn" type="button" aria-label="Remonter en haut de page" title="Remonter en haut de page">↑</button>
+<div id="sellPhoneFloat" class="sell-phone-float" hidden><img id="sellPhoneImg" alt="Numéro de contact pour les articles à vendre"></div>
 <div class="toast" id="toast"><span id="toastMsg"></span><button id="toastUndo" class="toast-undo" type="button">Annuler</button></div>
 
 <div id="modalOverlay" class="modal-overlay" hidden>
@@ -1859,6 +1869,7 @@ function renderSectionTabs(){
 
   document.getElementById('sidebarToggleBtn').textContent = '☰ ' + (dkActive ? 'Collection Donkey Kong' : SECTION_BY_KEY[state.section].label);
   document.getElementById('addBtn').hidden = (state.section === 'vente') || dkActive;
+  document.getElementById('sellPhoneFloat').hidden = !(state.section === 'vente' && !dkActive);
   updateControlsHeightVar();
 }
 function switchSection(key){
@@ -2876,6 +2887,32 @@ scrollTopBtn.addEventListener('click', ()=>{
   window.scrollTo({top:0, behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth'});
 });
 updateScrollTopVisibility();
+
+/* ---------- pastille flottante "contact vente" (page À vendre uniquement) ----------
+   Le numéro n'est jamais présent en texte dans la page (ni dans le DOM, ni dans un
+   attribut) : il est dessiné sur un canvas puis exporté en image, pour ne pas être
+   moissonné par les robots qui aspirent les numéros de téléphone visibles en clair. */
+function drawSellPhoneBadge(){
+  const phone = '06 99 71 96 44';
+  const dpr = window.devicePixelRatio || 1;
+  const w = 176, h = 40;
+  const canvas = document.createElement('canvas');
+  canvas.width = w*dpr; canvas.height = h*dpr;
+  const ctx = canvas.getContext('2d');
+  ctx.scale(dpr, dpr);
+  ctx.fillStyle = '#F2F0EC';
+  ctx.font = "700 15px 'Inter', sans-serif";
+  ctx.textBaseline = 'middle';
+  ctx.textAlign = 'center';
+  ctx.fillText('\u{1F4DE} ' + phone, w/2, h/2 + 1);
+  document.getElementById('sellPhoneImg').src = canvas.toDataURL('image/png');
+}
+if(document.fonts && document.fonts.ready){
+  drawSellPhoneBadge();
+  document.fonts.ready.then(drawSellPhoneBadge);
+} else {
+  drawSellPhoneBadge();
+}
 
 let searchTimer;
 const searchInputEl = document.getElementById('searchInput');
