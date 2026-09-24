@@ -1296,7 +1296,8 @@ async function ensureCatalogMigrationV15(meta){
 }
 
 function subscribeCatalog(){
-  catalogCol.onSnapshot(snap=>{
+  const query = directVenteLink ? catalogCol.where('vente','==',true) : catalogCol;
+  query.onSnapshot(snap=>{
     allCatalog = snap.docs.map(d=>Object.assign({id:d.id}, d.data()));
     render();
   }, err=>{
@@ -1315,7 +1316,8 @@ function subscribeSubcats(){
 }
 
 function subscribe(){
-  gamesCol.onSnapshot(snap=>{
+  const query = directVenteLink ? gamesCol.where('vente','==',true) : gamesCol;
+  query.onSnapshot(snap=>{
     allGames = snap.docs.map(d=>Object.assign({id:d.id}, d.data()));
     setStatus('ok');
     render();
