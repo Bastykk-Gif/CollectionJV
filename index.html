@@ -582,7 +582,10 @@ let allCatalog = [];
 // Lien direct partageable vers "À vendre" (ex: .../#vente) : ouvre le catalogue
 // directement sur cette section, en connectant automatiquement en mode visiteur.
 const directVenteLink = location.hash === '#vente';
-const state = { section: directVenteLink ? 'vente' : 'jeux', q:'', mode:'all', value:null };
+// Lien direct partageable vers la "Collection Donkey Kong" (ex: .../#dk) : même principe,
+// connexion visiteur automatique puis recherche "kong" appliquée d'office.
+const directDkLink = location.hash === '#dk';
+const state = { section: directVenteLink ? 'vente' : 'jeux', q: directDkLink ? 'kong' : '', mode:'all', value:null };
 
 // Isole le numéro de suite d'un titre (ex : "Toy-Con 02 : Kit Robot", "... 3 OST...") pour le
 // comparer numériquement plutôt que caractère par caractère : sinon "1" (non complété par un
@@ -1397,7 +1400,7 @@ auth.onAuthStateChanged(user=>{
     document.body.classList.toggle('is-readonly', isReadOnly());
     document.getElementById('visitorBadge').hidden = !isReadOnly();
     if(!appStarted){ appStarted = true; init(); }
-  } else if(directVenteLink){
+  } else if(directVenteLink || directDkLink){
     authGate.hidden = true;
     auth.signInAnonymously().catch(err=>{
       console.error(err);
@@ -2921,6 +2924,7 @@ let searchTimer;
 const searchInputEl = document.getElementById('searchInput');
 const searchClearBtn = document.getElementById('searchClear');
 function updateSearchClearVisibility(){ searchClearBtn.hidden = !searchInputEl.value; }
+if(directDkLink){ searchInputEl.value = state.q; updateSearchClearVisibility(); }
 searchInputEl.addEventListener('input', e=>{
   updateSearchClearVisibility();
   clearTimeout(searchTimer);
