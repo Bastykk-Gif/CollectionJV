@@ -456,6 +456,7 @@ const SECTION_DEFS = [
   {key:'jeux', label:'Jeux', type:null},
   {key:'accessoires', label:'Accessoires', type:'accessoire'},
   {key:'derives', label:'Produits dérivés', type:'derive'},
+  {key:'societe', label:'Jeux de société', type:'societe'},
   {key:'musique', label:'Musique & Films', type:'musique'},
   {key:'livres', label:'Magazines, Livres & BD', type:'livre'},
   {key:'vente', label:'À vendre', type:null},
@@ -468,7 +469,7 @@ const SECTION_BY_KEY = {}; SECTION_DEFS.forEach(s=>SECTION_BY_KEY[s.key]=s);
 //   les sous-catégories de cette section ; cliquer le groupe navigue dedans (et le déplie de
 //   fait), cliquer un enfant navigue directement sur cette sous-catégorie.
 const SECTION_TAB_GROUPS = [
-  { key:'jeuxvideo', label:'Jeux vidéo', kind:'sections', sections:['consoles','systemes','jeux','accessoires','derives'] },
+  { key:'jeuxvideo', label:'Jeux vidéo', kind:'sections', sections:['consoles','systemes','jeux','accessoires','derives','societe'] },
   { key:'musique', label:'Musique & Films', kind:'subcats', sectionKey:'musique' },
   { key:'livres', label:'Magazines, Livres & BD', kind:'subcats', sectionKey:'livres' },
 ];
@@ -486,7 +487,7 @@ let customSubcats = {};
 // Ordre imposé (au lieu de l'alphabétique) pour les sous-catégories de Musique & Films -
 // une éventuelle sous-catégorie future non listée ici serait simplement ajoutée à la fin,
 // triée alphabétiquement parmi ses semblables.
-const MUSIQUE_SUBCAT_ORDER = ['K7','CD','Vinyles','VHS','DVD','Blu-ray'];
+const MUSIQUE_SUBCAT_ORDER = ['Vinyles','K7','CD','VHS','DVD','Blu-ray'];
 function subcatOptionsFor(type){
   if(!TYPES_WITH_SUBCAT.includes(type)) return null;
   const list = (customSubcats[type] || []).slice();
@@ -524,7 +525,8 @@ function subcatNavEntries(type){
     const children = g.subcats.filter(sc=>options.includes(sc));
     if(children.length) entries.push({kind:'group', label:g.label, children});
   });
-  entries.sort((a,b)=>collator(a.kind==='flat'?a.name:a.label, b.kind==='flat'?b.name:b.label));
+  // Sans groupe (ex. Musique & Films), on garde l'ordre de subcatOptionsFor (ordre imposé éventuel).
+  if(groups.length) entries.sort((a,b)=>collator(a.kind==='flat'?a.name:a.label, b.kind==='flat'?b.name:b.label));
   return entries;
 }
 // K7/CD/Vinyles : pas de champ "Nom" saisi à la main, le titre de la fiche est dérivé de Artiste + Album.
@@ -2223,7 +2225,7 @@ function openCard(id, isNew=false){
 }
 
 /* ---------- fiche catalogue (Consoles / Systèmes de jeux / Accessoires / Produits dérivés) ---------- */
-const TYPE_LABELS = {console:'Console', systeme:'Système de jeu', accessoire:'Accessoire', derive:'Produit dérivé', musique:'Musique & Films', livre:'Magazines, Livres & BD'};
+const TYPE_LABELS = {console:'Console', systeme:'Système de jeu', accessoire:'Accessoire', derive:'Produit dérivé', societe:'Jeu de société', musique:'Musique & Films', livre:'Magazines, Livres & BD'};
 // Le champ "Type" des fiches suit désormais la même hiérarchie que le menu (Jeux vidéo /
 // Musique & Films / Livre) : un premier menu choisit le groupe, un second (uniquement pour
 // "Jeux vidéo", qui ne correspond à aucun vrai type de donnée) précise la collection réelle.
@@ -2231,6 +2233,7 @@ const TYPE_GROUPS = [
   {value:'jeuxvideo', label:'Jeux vidéo', types:[
     {value:'jeu', label:'Jeu'}, {value:'console', label:'Console'}, {value:'systeme', label:'Système de jeu'},
     {value:'accessoire', label:'Accessoire'}, {value:'derive', label:'Produit dérivé'},
+    {value:'societe', label:'Jeu de société'},
   ]},
   {value:'musique', label:'Musique & Films', types:[{value:'musique', label:'Musique & Films'}]},
   {value:'livre', label:'Magazines, Livres & BD', types:[{value:'livre', label:'Magazines, Livres & BD'}]},
@@ -2250,6 +2253,7 @@ function catalogFieldKeysFor(type, sousCat){
   if(type === 'console') return ['y','pays','cat'];
   if(type === 'systeme') return ['y','remarque'];
   if(type === 'accessoire') return ['consoleLiee','jeuLie','cat','fabricant'];
+  if(type === 'societe') return ['y','editeur'];
   if(type === 'derive'){
     switch(sousCat){
       case 'Amiibo': return ['y','numero','jeuLie'];
