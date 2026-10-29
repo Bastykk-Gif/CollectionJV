@@ -207,6 +207,10 @@ a{color:inherit;}
 .modal-overlay[hidden]{display:none;}
 .index-card{position:relative; background:var(--card-bg); color:var(--ink); width:min(560px,100%); max-height:88vh; overflow:auto; border-radius:7px; box-shadow:var(--shadow); padding:36px 28px 24px; font-family:'Space Mono',monospace; border-top:7px solid var(--accent,var(--brass)); animation:cardPop .16s ease both;}
 @keyframes cardPop{from{opacity:0; transform:scale(.97) translateY(6px);} to{opacity:1; transform:scale(1) translateY(0);}}
+@keyframes cardSlideNext{from{opacity:0; transform:translateX(40px);} to{opacity:1; transform:translateX(0);}}
+@keyframes cardSlidePrev{from{opacity:0; transform:translateX(-40px);} to{opacity:1; transform:translateX(0);}}
+.index-card.slide-next{animation:cardSlideNext .18s ease both;}
+.index-card.slide-prev{animation:cardSlidePrev .18s ease both;}
 .index-card::before,.index-card::after{content:''; position:absolute; top:15px; width:10px; height:10px; border-radius:50%; background:var(--bg); box-shadow:inset 0 0 0 1px rgba(0,0,0,.15);}
 .index-card::before{left:18px;} .index-card::after{right:18px;}
 .card-stamp{position:absolute; top:15px; right:17px; border:2px solid var(--stamp); color:var(--stamp); padding:3px 9px; font-weight:700; font-size:.62rem; transform:rotate(-7deg); border-radius:5px; opacity:.85;}
@@ -2139,7 +2143,9 @@ let lastFocused = null;
 // Pressée pendant l'enregistrement déclenché par Entrée (voir plus bas) : indique à
 // saveCard/saveCatalogCard de fermer la fiche au lieu de repasser en mode consultation.
 let closeCardAfterSave = false;
-function closeCard(){ overlay.hidden = true; cardEl.innerHTML=''; if(lastFocused) lastFocused.focus(); }
+// Id de la fiche affichée (null pour une nouvelle fiche) : sert au swipe précédent/suivant.
+let currentCardId = null;
+function closeCard(){ overlay.hidden = true; cardEl.innerHTML=''; currentCardId = null; if(lastFocused) lastFocused.focus(); }
 function findGame(id){ return allGames.find(g=>g.id===id); }
 
 // Entrée dans un champ de la fiche = valide et ferme, comme le bouton "Enregistrer" suivi
@@ -2166,6 +2172,7 @@ function openCard(id, isNew=false){
   }
   const g = isNew ? {id:null, n:'', p:defaultP, cat:defaultCat, y:'', g:'', pub:'', dev:'', f:'', ed:'', r:'', img:'', vente:false, prix:''} : findGame(id);
   if(!g) return;
+  currentCardId = g.id;
   renderCard(g, isNew || !g.id);
   overlay.hidden = false;
   const focusTarget = cardEl.querySelector('input, .btn');
@@ -2277,6 +2284,7 @@ function openCatalogCard(id, isNew=false, forcedType=null){
     it = findCatalogItem(id);
   }
   if(!it) return;
+  currentCardId = it.id;
   renderCatalogCard(it, isNew || !it.id);
   overlay.hidden = false;
   const focusTarget = cardEl.querySelector('input, select, .btn');
@@ -2824,6 +2832,46 @@ function closeLightbox(){
   document.getElementById('lightboxImg').src = '';
 }
 document.getElementById('lightboxOverlay').addEventListener('click', closeLightbox);
+
+/* ---------- fiche précédente / suivante (swipe sur mobile, flèches au clavier) ---------- */
+// Suit l'ordre des vignettes affichées à l'écran : respecte donc le tri, le filtre et la
+// recherche en cours, et passe d'une console/sous-catégorie à la suivante sans coupure.
+// Uniquement en consultation (pas en édition, pour ne pas perdre une saisie).
+function cardIsEditing(){ return !!cardEl.querySelector('#cardActions .btn.primary'); }
+function showAdjacentCard(step){
+  if(overlay.hidden || !currentCardId || cardIsEditing()) return;
+  if(!document.getElementById('lightboxOverlay').hidden) return;
+  const tiles = Array.from(document.querySelectorAll('#shelf .box-tile[data-id]')).filter(t=>t.offsetParent !== null);
+  const idx = tiles.findIndex(t=>t.dataset.id === currentCardId);
+  if(idx === -1) return;
+  const next = tiles[idx + step];
+  if(!next) return;
+  const keepFocus = lastFocused;
+  if(findGame(next.dataset.id)) openCard(next.dataset.id);
+  else openCatalogCard(next.dataset.id);
+  lastFocused = keepFocus;
+  cardEl.classList.remove('slide-next','slide-prev');
+  void cardEl.offsetWidth; // relance l'animation
+  cardEl.classList.add(step > 0 ? 'slide-next' : 'slide-prev');
+  cardEl.scrollTop = 0;
+}
+let swipeStart = null;
+overlay.addEventListener('touchstart', e=>{
+  swipeStart = e.touches.length === 1 ? {x:e.touches[0].clientX, y:e.touches[0].clientY} : null;
+}, {passive:true});
+overlay.addEventListener('touchend', e=>{
+  if(!swipeStart) return;
+  const dx = e.changedTouches[0].clientX - swipeStart.x;
+  const dy = e.changedTouches[0].clientY - swipeStart.y;
+  swipeStart = null;
+  if(Math.abs(dx) < 60 || Math.abs(dx) < Math.abs(dy) * 1.5) return;
+  showAdjacentCard(dx < 0 ? 1 : -1); // swipe vers la gauche = fiche suivante
+}, {passive:true});
+document.addEventListener('keydown', e=>{
+  if(e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+  if(/^(INPUT|SELECT|TEXTAREA)$/.test(e.target.tagName)) return;
+  showAdjacentCard(e.key === 'ArrowRight' ? 1 : -1);
+});
 
 document.addEventListener('keydown', e=>{
   if(e.key!=='Escape') return;
