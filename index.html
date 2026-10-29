@@ -138,16 +138,6 @@ a{color:inherit;}
 .nav-plat-link.active{background:rgba(232,0,26,.16); color:var(--card); font-weight:600;}
 .nav-subcat-del{flex:0 0 auto; width:28px; background:none; border:none; color:var(--muted); font-size:1rem; cursor:pointer; display:flex; align-items:center; justify-content:center;}
 .nav-subcat-del:hover{color:var(--stamp);}
-.nav-subcat-add{padding:6px 18px 4px;}
-.nav-subcat-add-btn{background:none; border:1px dashed rgba(232,0,26,.4); color:var(--muted); font-family:'Inter',sans-serif; font-size:.78rem; font-weight:600; padding:7px 10px; border-radius:5px; cursor:pointer; width:100%; text-align:left;}
-.nav-subcat-add-btn:hover{color:var(--card); border-color:var(--brass-light);}
-.nav-subcat-add-btn[hidden]{display:none;}
-.nav-subcat-add-form{display:flex; flex-direction:column; gap:6px; margin-top:6px;}
-.nav-subcat-add-form[hidden]{display:none;}
-.nav-subcat-add-form input{background:var(--panel); border:1px solid rgba(232,0,26,.32); color:var(--card); padding:7px 9px; border-radius:5px; font-family:'Inter',sans-serif; font-size:.82rem;}
-.nav-subcat-add-actions{display:flex; gap:6px;}
-.nav-subcat-confirm-btn{background:var(--brass); color:var(--on-accent); border:none; padding:6px 10px; border-radius:5px; font-family:'Inter',sans-serif; font-weight:700; font-size:.78rem; cursor:pointer;}
-.nav-subcat-cancel-btn{background:none; border:1px solid rgba(232,0,26,.32); color:var(--muted); padding:6px 10px; border-radius:5px; font-family:'Inter',sans-serif; font-size:.78rem; cursor:pointer;}
 .sidebar-toggle-btn{display:none;}
 .sidebar-backdrop{display:none;}
 @media (max-width:880px){
@@ -1935,18 +1925,6 @@ function renderCatalogNav(){
       html += `<a href="#" class="nav-fam-link ${groupActive}" data-mode="subcatGroup" data-value="${escapeAttr(entry.label)}">${escapeHtml(entry.label)}<span class="nav-count">${groupCount}</span></a>`;
       html += `<div class="nav-subcat-children">${entry.children.map(renderChild).join('')}</div>`;
     });
-    if(!isReadOnly()){
-      html += `<div class="nav-subcat-add">
-        <button type="button" class="nav-subcat-add-btn" id="addSubcatBtn">+ Nouvelle sous-catégorie</button>
-        <div class="nav-subcat-add-form" id="addSubcatForm" hidden>
-          <input type="text" id="newSubcatInput" placeholder="Nom de la sous-catégorie" maxlength="40">
-          <div class="nav-subcat-add-actions">
-            <button type="button" class="nav-subcat-confirm-btn" id="newSubcatConfirm">Ajouter</button>
-            <button type="button" class="nav-subcat-cancel-btn" id="newSubcatCancel">Annuler</button>
-          </div>
-        </div>
-      </div>`;
-    }
   } else {
     catalogFamilyList(items).forEach(cat=>{
       const active = (state.mode==='family' && state.value===cat) ? 'active' : '';
@@ -1978,36 +1956,6 @@ function renderCatalogNav(){
         if(state.mode === 'subcat' && state.value === sc){ state.mode = 'all'; state.value = null; }
       });
     });
-    const addBtnEl = document.getElementById('addSubcatBtn');
-    const formEl = document.getElementById('addSubcatForm');
-    if(addBtnEl){
-      addBtnEl.addEventListener('click', ()=>{
-        addBtnEl.hidden = true;
-        formEl.hidden = false;
-        document.getElementById('newSubcatInput').focus();
-      });
-      document.getElementById('newSubcatCancel').addEventListener('click', ()=>{
-        formEl.hidden = true;
-        addBtnEl.hidden = false;
-      });
-      const confirmAdd = ()=>{
-        const input = document.getElementById('newSubcatInput');
-        const name = input.value.trim();
-        if(!name) return;
-        const existing = subcatOptionsFor(sectionType);
-        if(existing.some(s=>s.toLowerCase()===name.toLowerCase())){
-          alert('Cette sous-catégorie existe déjà.');
-          return;
-        }
-        db.collection('meta').doc('subcats').set({[sectionType]: firebase.firestore.FieldValue.arrayUnion(name)}, {merge:true})
-          .then(()=>{ state.mode = 'subcat'; state.value = name; render(); })
-          .catch(err=>{ console.error(err); alert("Impossible d'ajouter cette sous-catégorie."); });
-      };
-      document.getElementById('newSubcatConfirm').addEventListener('click', confirmAdd);
-      document.getElementById('newSubcatInput').addEventListener('keydown', e=>{
-        if(e.key === 'Enter'){ e.preventDefault(); confirmAdd(); }
-      });
-    }
   }
 }
 function buildCatalogArtInner(it){
@@ -2335,7 +2283,10 @@ function openCatalogCard(id, isNew=false, forcedType=null){
   if(focusTarget) focusTarget.focus();
 }
 
-function buildComboField(key, label, currentValue, options, required){
+// allowNew=false : pas d'option "+ Nouveau…" (liste fermée). Une valeur enregistrée hors liste
+// reste alors proposée telle quelle pour ne pas être perdue à l'enregistrement.
+function buildComboField(key, label, currentValue, options, required, allowNew=true){
+  if(!allowNew && currentValue && !options.includes(currentValue)) options = [...options, currentValue];
   const inOptions = !!currentValue && options.includes(currentValue);
   const isLegacyCustom = !!currentValue && !inOptions; // has a saved value that isn't in the known list
   const placeholderHtml = currentValue ? '' : `<option value="" disabled selected>- Choisir -</option>`;
@@ -2346,7 +2297,7 @@ function buildComboField(key, label, currentValue, options, required){
       <select id="f_${key}_sel" class="combo-select" data-key="${key}">
         ${placeholderHtml}
         ${opts}
-        <option value="__new__" ${isLegacyCustom?'selected':''}>+ Nouveau…</option>
+        ${allowNew ? `<option value="__new__" ${isLegacyCustom?'selected':''}>+ Nouveau…</option>` : ''}
       </select>
       <input type="text" id="f_${key}" class="combo-new-input" placeholder="Nouvelle valeur - ${label}" value="${isLegacyCustom?escapeAttr(currentValue):''}" ${isLegacyCustom?'':'hidden'}>
     </dd>
@@ -2548,7 +2499,7 @@ function renderCatalogCard(it, editMode){
       </select></dd></div>`;
     const nomFieldHtml = `<div class="field required"><dt>Nom</dt><dd><input type="text" id="f_n" value="${escapeAttr(it.n)}" placeholder="Nom de l'objet"></dd></div>`;
     if(!namedByMusic) fieldsHtml += nomFieldHtml;
-    if(usesSubcat) fieldsHtml += buildComboField('sousCat', 'Sous-catégorie', it.sousCat||'', subcatOptionsFor(it.type), true);
+    if(usesSubcat) fieldsHtml += buildComboField('sousCat', 'Sous-catégorie', it.sousCat||'', subcatOptionsFor(it.type), true, false);
     if(namedByMusic) fieldsHtml += nomFieldHtml;
     catalogFieldKeysFor(it.type, it.sousCat).forEach(key=>{ fieldsHtml += buildCatalogFieldHtml(key, it); });
     fieldsHtml += `<div class="field field-vente"><dt>À vendre</dt><dd><input type="checkbox" id="f_vente" class="vente-checkbox" ${it.vente?'checked':''}></dd></div>`;
